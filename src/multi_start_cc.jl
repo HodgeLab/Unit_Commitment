@@ -1,3 +1,5 @@
+struct MultiStartUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end # This is my slightly tailored deterministic
+
 function apply_cc_constraints!(problem)
     optimization_container = PSI.get_optimization_container(problem)
     restrictions = problem.ext["cc_restrictions"]

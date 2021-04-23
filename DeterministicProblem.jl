@@ -1,17 +1,18 @@
-include("src/Unit_commitment.jl")
+include("src/unit_commitment.jl")
 using PowerSimulations
 using PowerSystems
 using Dates
 # using PowerGraphics
 
 ## Local
-using Xpress
-solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+# using Xpress
+# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
 ## Eagle
-# using Gurobi
-# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+using Gurobi
+solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-system_da = System("data/DA_sys.json"; time_series_read_only = true)
+system_file_path = "/Users/jdlara/cache/blue_texas/"
+system_da = System(joinpath(system_file_path, "HA_sys.json"); time_series_read_only = true)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
 # system_ed = System("data/RT_sys.json"; time_series_read_only = true)
 
@@ -69,29 +70,29 @@ for template in [template_dauc] # [template_dauc, template_hauc, template_ed]
     set_device_model!(template, RenewableDispatch, RenewableFullDispatch)
     set_device_model!(template, PowerLoad, StaticPowerLoad)
     # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
-    set_device_model!(template, HydroDispatch, FixedOutput) 
+    set_device_model!(template, HydroDispatch, FixedOutput)
     set_service_model!(template, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
     set_service_model!(template, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
     set_device_model!(template, GenericBattery, BookKeepingwReservation)
 end
 
-set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment) 
+set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
 # ignore HA for now
 # set_device_model!(template_ed, ThermalMultiStart, ThermalRampLimited)
 
 UC = OperationsProblem(
     MultiStartUnitCommitmentCC,
-    template_dauc, 
+    template_dauc,
     system_da,
     optimizer = solver,
     initial_time = DateTime("2018-04-01T00:00:00"),
     optimizer_log_print=true,
     balance_slack_variables=true,
-)    
-UC.ext["cc_restrictions"] = JSON.parsefile("data/cc_restrictions.json")
+)
+UC.ext["cc_restrictions"] = JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 
 # Build and solve the standalone problem
-build!(UC; output_dir="./results_dev", serialize=false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
+build!(UC; output_dir="./results", serialize=false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
 problem_results = ProblemResults(UC)
 write_to_CSV(problem_results, "./results_dev")
