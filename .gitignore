@@ -125,3 +125,12 @@ $RECYCLE.BIN/
 
 ## Acknowledgements
 # Many thanks to `https://gitignore.io/`, written and maintained by Joe Blau, which contributed much material to this gitignore file.
+
+# Personal additions
+results_dev/
+*.txt
+*.code-workspace
+experimental_notes.jl
+DA_preliminary_model.jl
+*.sh
+xpress_keys.csv
