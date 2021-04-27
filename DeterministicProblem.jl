@@ -1,4 +1,4 @@
-include("src/unit_commitment.jl")
+include("src/Unit_commitment.jl")
 using PowerSimulations
 using PowerSystems
 using Dates
@@ -11,8 +11,13 @@ using Dates
 using Gurobi
 solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-system_file_path = "/Users/jdlara/cache/blue_texas/"
-system_da = System(joinpath(system_file_path, "HA_sys.json"); time_series_read_only = true)
+output_path = "./results/Deterministic"
+## Jose
+# system_file_path = "/Users/jdlara/cache/blue_texas/"
+## Kate
+system_file_path = "data/"
+
+system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_only = true)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
 # system_ed = System("data/RT_sys.json"; time_series_read_only = true)
 
@@ -92,7 +97,7 @@ UC = OperationsProblem(
 UC.ext["cc_restrictions"] = JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 
 # Build and solve the standalone problem
-build!(UC; output_dir="./results", serialize=false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
+build!(UC; output_dir=output_path, serialize=false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
 problem_results = ProblemResults(UC)
-write_to_CSV(problem_results, "./results_dev")
+write_to_CSV(problem_results, output_path)
