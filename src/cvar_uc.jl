@@ -262,16 +262,24 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
 
     # Eq (7) Commitment constraints
-    commitment_constraints_1 = JuMP.@constraint(
-        jump_model,
-        [g in thermal_gen_names],
-        ug[g, 1] - ug_t0[g] == vg[g, 1] - wg[g, 1]
-    ) # pg_lib (6)
-    commitment_constraints = JuMP.@constraint(
-        jump_model,
-        [g in thermal_gen_names, t in time_steps[2:end]],
-        ug[g, t] - ug[g, t - 1] == vg[g, t] - wg[g, t]
+    commitment_constraints = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
+        undef,
+        thermal_gen_names,
+        time_steps,
     )
+    for g in thermal_gen_names, t in time_steps
+        if t == 1  # pg_lib (6)
+            commitment_constraints[g, 1] = JuMP.@constraint(
+                jump_model,
+                ug[g, 1] - ug_t0[g] == vg[g, 1] - wg[g, 1]
+            )
+        else
+            commitment_constraints[g, t] = JuMP.@constraint(
+                jump_model,
+                ug[g, t] - ug[g, t - 1] == vg[g, t] - wg[g, t]
+            )
+        end
+    end
 
     # Eq (8) Must-run
     for g in must_run_gen_names, t in time_steps
