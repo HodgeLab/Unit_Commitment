@@ -226,7 +226,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
 
     # Eq (6) PWL variable cost constraint
     # PWL Cost function auxiliary variables
-    # TODO check if this needs to be replaced: 1:length(variable_cost[g]
     lambda_bound = JuMP.@constraint(
         jump_model,
         [g in thermal_gen_names, i in 1:length(variable_cost[g]), t in time_steps],
@@ -337,20 +336,22 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     end
 
     # Eq (11) Start-up lag
-    # TODO test after defining time_down_t0
     startup_lag_constraints = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
         undef,
         thermal_gen_names,
         startup_categories[1:(end - 1)],
         time_steps,
     )
-    for g in thermal_gen_names, (si, startup) in enumerate(startup_categories[1:(end - 1)])
+    for g in thermal_gen_names, (si, startup) in enumerate(startup_categories[1:(end - 1)]), t in time_steps
         g_startup = get_start_time_limits(get_component(ThermalMultiStart, system, g))
         if t >= g_startup[si + 1]
-            time_range = g_startup[si]:(g_startup[si + 1] - 1)
+            time_range = UnitRange{Int}(
+                Int(ceil(g_startup[si])),
+                Int(ceil(g_startup[si + 1] - 1))
+            )
             startup_lag_constraints[g, startup, t] = JuMP.@constraint(
                 jump_model,
-                δ_sg[g, startup, t] <= sum(wg[g, Int(t - i)] for i in time_range)
+                δ_sg[g, startup, t] <= sum(wg[g, t - i] for i in time_range)
             )
         end
         # Initial start-up type, based on Tight and Compact eq (15) rather than pg_lib (7)
