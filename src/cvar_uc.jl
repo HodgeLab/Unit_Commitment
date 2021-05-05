@@ -13,6 +13,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
+    resolution = PSI.model_resolution(optimization_container)
 
     # Sets
     scenarios = 1:31
@@ -343,11 +344,11 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         time_steps,
     )
     for g in thermal_gen_names, (si, startup) in enumerate(startup_categories[1:(end - 1)]), t in time_steps
-        g_startup = get_start_time_limits(get_component(ThermalMultiStart, system, g))
+        g_startup = PSI._convert_hours_to_timesteps(get_start_time_limits(get_component(ThermalMultiStart, system, g)), resolution)
         if t >= g_startup[si + 1]
             time_range = UnitRange{Int}(
-                Int(ceil(g_startup[si])),
-                Int(ceil(g_startup[si + 1] - 1))
+                Int(g_startup[si]),
+                Int(g_startup[si + 1] - 1)
             )
             startup_lag_constraints[g, startup, t] = JuMP.@constraint(
                 jump_model,
