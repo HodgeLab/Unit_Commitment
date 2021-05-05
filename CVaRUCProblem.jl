@@ -1,4 +1,4 @@
-include("src/unit_commitment.jl")
+include("src/Unit_commitment.jl")
 using PowerSimulations
 using PowerSystems
 using Dates
@@ -11,8 +11,13 @@ using Dates
 using Gurobi
 solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-system_file_path = "/Users/jdlara/cache/blue_texas/"
-system_da = System(joinpath(system_file_path, "HA_sys.json"); time_series_read_only = true)
+output_path = "./results/CVaR"
+## Jose
+# system_file_path = "/Users/jdlara/cache/blue_texas/"
+## Kate
+system_file_path = "data/"
+
+system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_only = true)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
 # system_ed = System("data/RT_sys.json"; time_series_read_only = true)
 
@@ -50,15 +55,19 @@ for system in [system_da] # [system_da, system_ha, system_ed]
 
     s = get_component(VariableReserve{ReserveUp}, system, "REG_UP")
     req = get_requirement(s)
-    set_requirement!(s, req*1.5)
+    set_requirement!(s, req * 1.5)
 
     s = get_component(VariableReserve{ReserveDown}, system, "REG_DN")
     req = get_requirement(s)
-    set_requirement!(s, req*1.5)
+    set_requirement!(s, req * 1.5)
 end
 
 # Set all CC's to start off
-for g in get_components(ThermalMultiStart, system_da, x -> get_prime_mover(x) in [PrimeMovers.CT, PrimeMovers.CC])
+for g in get_components(
+    ThermalMultiStart,
+    system_da,
+    x -> get_prime_mover(x) in [PrimeMovers.CT, PrimeMovers.CC],
+)
     set_status!(g, false)
     set_active_power!(g, 0.0)
 end
@@ -86,11 +95,14 @@ UC = OperationsProblem(
     system_da,
     optimizer = solver,
     initial_time = DateTime("2018-04-01T00:00:00"),
-    optimizer_log_print=true,
-    balance_slack_variables=true,
+    optimizer_log_print = true,
+    balance_slack_variables = true,
 )
-UC.ext["cc_restrictions"] = JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
+UC.ext["cc_restrictions"] =
+    JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 
 # Build and solve the standalone problem
-build!(UC; output_dir="./results", serialize=false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
+build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
+problem_results = ProblemResults(UC)
+write_to_CSV(problem_results, output_path)
