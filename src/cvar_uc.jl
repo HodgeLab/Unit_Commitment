@@ -666,7 +666,7 @@ function PSI.write_to_CSV(
         if !(k in exclusions)
             df = PSI.axis_array_to_dataframe(JuMP.value.(v))
             file_name = joinpath(output_path, string(k), ".csv")
-            CSV.write(df, file_name)
+            CSV.write(file_name, df)
         end
     end
 end
