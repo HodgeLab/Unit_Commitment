@@ -653,3 +653,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         sum(ug[i, t] for i in restrictions[k]) <= 1
     )
 end
+
+# Unconventional route. To be cleaned later.
+function PSI.write_to_CSV(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}, output_path::String)
+    optimization_container = PSI.get_optimization_container(problem)
+    jump_model = PSI.get_jump_model(optimization_container)
+    exclusions = [:λ] # PWL chuncks, expensive to export and useless
+    for (k, var_array) in jump_model.obj_dict
+        df = PSI. axis_array_to_dataframe(v)
+        file_name = joinpath(output_path, string(k), ".csv")
+        CSV.write(df, file_name)
+    end
+end

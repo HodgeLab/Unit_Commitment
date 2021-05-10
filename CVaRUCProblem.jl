@@ -13,9 +13,9 @@ solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 output_path = "./results/CVaR"
 ## Jose
-# system_file_path = "/Users/jdlara/cache/blue_texas/"
+system_file_path = "/Users/jdlara/cache/blue_texas/"
 ## Kate
-system_file_path = "data/"
+# system_file_path = "data/"
 
 system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_only = true)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
@@ -104,5 +104,8 @@ UC.ext["cc_restrictions"] =
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
-problem_results = ProblemResults(UC)
-write_to_CSV(problem_results, output_path)
+
+
+# This code only works with default estages
+#problem_results = ProblemResults(UC)
+#write_to_CSV(problem_results, output_path)
