@@ -37,12 +37,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     get_rmp_up_limit(g) = PSY.get_ramp_limits(g).up
     get_rmp_dn_limit(g) = PSY.get_ramp_limits(g).down
     ramp_up = Dict(
-        g => get_rmp_up_limit(get_component(ThermalMultiStart, system, g)) * MINS_IN_HOUR for
-        g in thermal_gen_names
+        g =>
+            get_rmp_up_limit(get_component(ThermalMultiStart, system, g)) * MINS_IN_HOUR for g in thermal_gen_names
     )
     ramp_dn = Dict(
-        g => get_rmp_dn_limit(get_component(ThermalMultiStart, system, g)) * MINS_IN_HOUR for
-        g in thermal_gen_names
+        g =>
+            get_rmp_dn_limit(get_component(ThermalMultiStart, system, g)) * MINS_IN_HOUR for g in thermal_gen_names
     )
     pg_lim = Dict(
         g => get_active_power_limits(get_component(ThermalMultiStart, system, g)) for
@@ -269,15 +269,11 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
     for g in thermal_gen_names, t in time_steps
         if t == 1  # pg_lib (6)
-            commitment_constraints[g, 1] = JuMP.@constraint(
-                jump_model,
-                ug[g, 1] - ug_t0[g] == vg[g, 1] - wg[g, 1]
-            )
+            commitment_constraints[g, 1] =
+                JuMP.@constraint(jump_model, ug[g, 1] - ug_t0[g] == vg[g, 1] - wg[g, 1])
         else
-            commitment_constraints[g, t] = JuMP.@constraint(
-                jump_model,
-                ug[g, t] - ug[g, t - 1] == vg[g, t] - wg[g, t]
-            )
+            commitment_constraints[g, t] =
+                JuMP.@constraint(jump_model, ug[g, t] - ug[g, t - 1] == vg[g, t] - wg[g, t])
         end
     end
 
@@ -343,7 +339,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         startup_categories[1:(end - 1)],
         time_steps,
     )
-    for g in thermal_gen_names, (si, startup) in enumerate(startup_categories[1:(end - 1)]), t in time_steps
+    for g in thermal_gen_names,
+        (si, startup) in enumerate(startup_categories[1:(end - 1)]),
+        t in time_steps
+
         g_startup = PSI._convert_hours_to_timesteps(get_start_time_limits(get_component(ThermalMultiStart, system, g)), resolution)
         if t >= g_startup[si + 1]
             time_range = UnitRange{Int}(
