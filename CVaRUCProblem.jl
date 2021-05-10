@@ -104,7 +104,7 @@ UC.ext["cc_restrictions"] =
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
+write_to_CSV(UC, output_path)
 
 # This code only works with default estages
 #problem_results = ProblemResults(UC)
-#write_to_CSV(problem_results, output_path)
