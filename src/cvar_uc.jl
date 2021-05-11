@@ -14,6 +14,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     resolution = PSI.model_resolution(optimization_container)
+    use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
     # Sets
     scenarios = 1:31
@@ -26,6 +27,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     L_SUPP = 1 / 4 # 15 min, to start
     C_RR = 1000 # Penalty cost of recourse reserve
     α = 0.20 # Risk tolerance level
+    C_penalty = 5000
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
@@ -217,6 +219,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         λ[g in thermal_gen_names, i in 1:length(variable_cost[g]), t in time_steps] <=
         PSY.get_breakpoint_upperbounds(variable_cost[g])[i]
     )
+    if use_slack
+        slack_reg⁺ = JuMP.@variable(jump_model, slack_reg⁺[t in time_steps] >= 0)
+    end
     # -------------------------------------------------------------
     # Constraints
     # -------------------------------------------------------------
@@ -257,8 +262,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             Cg[g, t] +
             sum(startup_cost[g][s] * δ_sg[g, s, t] for s in startup_categories) +
             shutdown_cost[g] * wg[g, t] for g in thermal_gen_names, t in time_steps
-        ) +
-        C_RR * (β + 1 / (length(scenarios) * (1 - α)) * sum(z[j] for j in scenarios))
+        )  +
+        C_RR * (β + 1 / (length(scenarios) * (1 - α)) * sum(z[j] for j in scenarios)) +
+        (use_slack ? C_penalty * sum(slack_reg⁺[t] for t in time_steps) : 0 )
     )
 
     # Eq (7) Commitment constraints
@@ -371,7 +377,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     reg⁺_constraints = JuMP.@constraint(
         jump_model,
         [t in time_steps],
-        sum(reg⁺[g, t] for g in reg⁺_device_names) >= required_reg⁺[t]
+        sum(reg⁺[g, t] for g in reg⁺_device_names) >= required_reg⁺[t] - 
+        (use_slack ? slack_reg⁺[t] : 0)
     )
     # Eq (18) Total reg down
     reg⁻_constraints = JuMP.@constraint(

@@ -6,17 +6,17 @@ using CSV
 # using PowerGraphics
 
 ## Local
-# using Xpress
-# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+using Xpress
+solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
 ## Eagle
-using Gurobi
-solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+# using Gurobi
+# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 output_path = "./results/CVaR"
 ## Jose
-system_file_path = "/Users/jdlara/cache/blue_texas/"
+# system_file_path = "/Users/jdlara/cache/blue_texas/"
 ## Kate
-# system_file_path = "data/"
+system_file_path = "data/"
 
 system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_only = true)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
@@ -59,7 +59,7 @@ UC = OperationsProblem(
     template_dauc,
     system_da,
     optimizer = solver,
-    initial_time = DateTime("2018-04-01T00:00:00"),
+    initial_time = DateTime("2018-04-20T00:00:00"),
     optimizer_log_print = true,
     balance_slack_variables = true,
 )
@@ -70,6 +70,3 @@ UC.ext["cc_restrictions"] =
 build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
 write_to_CSV(UC, output_path)
-
-# This code only works with default estages
-#problem_results = ProblemResults(UC)
