@@ -6,17 +6,17 @@ using CSV
 # using PowerGraphics
 
 ## Local
-# using Xpress
-# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+using Xpress
+solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
 ## Eagle
-using Gurobi
-solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+# using Gurobi
+# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 output_path = "./results/CVaR"
 ## Jose
-system_file_path = "/Users/jdlara/cache/blue_texas/"
+# system_file_path = "/Users/jdlara/cache/blue_texas/"
 ## Kate
-# system_file_path = "data/"
+system_file_path = "data/"
 
 system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_only = true)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
@@ -24,43 +24,7 @@ system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_o
 
 # Jose's tune-ups for the HA UC
 for system in [system_da] # [system_da, system_ha, system_ed]
-    for g in get_components(
-        ThermalMultiStart,
-        system,
-        x -> get_prime_mover(x) == ThermalFuels.NATURAL_GAS,
-    )
-        lims = get_ramp_limits(g)
-        set_time_limits!(g, (up = 1.1 * lims.up, down = 1.1 * lims.down))
-        set_ramp_limits!(g, (up = 1.25 * lims.up, down = 1.25 * lims.down))
-    end
-
-    for g in get_components(
-        ThermalMultiStart,
-        system,
-        x -> get_prime_mover(x) == ThermalFuels.COAL,
-    )
-        lims = get_ramp_limits(g)
-        set_ramp_limits!(g, (up = 1.25 * lims.up, down = 1.25 * lims.down))
-    end
-    for g in get_components(
-        RenewableDispatch,
-        system,
-        x -> get_prime_mover(x) != PrimeMovers.PVe,
-    )
-        set_available!(g, true)
-    end
-
-    for g in get_components(HydroGen, system)
-        set_available!(g, true)
-    end
-
-    s = get_component(VariableReserve{ReserveUp}, system, "REG_UP")
-    req = get_requirement(s)
-    set_requirement!(s, req * 1.5)
-
-    s = get_component(VariableReserve{ReserveDown}, system, "REG_DN")
-    req = get_requirement(s)
-    set_requirement!(s, req * 1.5)
+    appply_manual_data_updates!(system)
 end
 
 # Set all CC's to start off
@@ -95,7 +59,7 @@ UC = OperationsProblem(
     template_dauc,
     system_da,
     optimizer = solver,
-    initial_time = DateTime("2018-04-01T00:00:00"),
+    initial_time = DateTime("2018-04-20T00:00:00"),
     optimizer_log_print = true,
     balance_slack_variables = true,
 )
@@ -106,6 +70,3 @@ UC.ext["cc_restrictions"] =
 build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
 write_to_CSV(UC, output_path)
-
-# This code only works with default estages
-#problem_results = ProblemResults(UC)
