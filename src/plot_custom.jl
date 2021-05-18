@@ -18,6 +18,10 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
 
     gen = get_generation_data(problem, total_wind, total_hydro; kwargs...)
     cat = make_fuel_dictionary(system)
+    # Rename "other" to "battery"
+    # ! This does change the color from light to bright pink
+    cat["Battery"] = cat["Other"]
+    delete!(cat, "Other")
 
     fuel = my_categorize_data(gen.data, cat; kwargs...)
 
