@@ -12,7 +12,13 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-output_path = "./results/CVaR"
+initial_time = "2018-04-20T00:00:00"
+
+output_path = "./results/CVaR/" * split(initial_time, "T")[1]* "/"
+if !isdir(output_path)
+    mkpath(output_path)
+end
+
 ## Jose
 # system_file_path = "/Users/jdlara/cache/blue_texas/"
 ## Kate
@@ -59,7 +65,7 @@ UC = OperationsProblem(
     template_dauc,
     system_da,
     optimizer = solver,
-    initial_time = DateTime("2018-04-20T00:00:00"),
+    initial_time = DateTime(initial_time),
     optimizer_log_print = true,
     balance_slack_variables = false,
 )
