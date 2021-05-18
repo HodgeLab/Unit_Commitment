@@ -3,7 +3,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     set_display = get(kwargs, :set_display, true)
     title = get(kwargs, :title, "Fuel")
 
-    sys = PSI.get_system(problem)
+    system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
 
@@ -16,7 +16,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     )
 
     gen = get_generation_data(problem, total_wind, total_hydro; kwargs...)
-    cat = make_fuel_dictionary(sys)
+    cat = make_fuel_dictionary(system)
 
     fuel = my_categorize_data(gen.data, cat; kwargs...)
 
@@ -28,7 +28,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     y_label = get(
         kwargs,
         :y_label,
-        PG._make_ylabel(get_base_power(sys), variable = "", time = ""),
+        "Generation (GW)",
     )
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
@@ -48,7 +48,8 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     kwargs[:linewidth] = get(kwargs, :linewidth, 3)
 
     # Add load line
-    load_agg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_load
+    load_agg = (PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_load) .* 
+        get_base_power(system) ./ 1000
     DataFrames.rename!(load_agg, Symbol.(["Load"]))
     p = plot_dataframe(
         p,
@@ -109,6 +110,11 @@ function PG.get_generation_data(
     if curtailment
         variables[:pW_curt] =
             PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .-= total_wind
+    end
+
+    # Scale from 100 MW to GW
+    for v in keys(variables)
+        variables[v] .*= get_base_power(system) ./ 1000
     end
 
     timestamps = get_timestamps(problem)
