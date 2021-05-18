@@ -1,7 +1,6 @@
 function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
-    p = PG._empty_plot()
-    set_display = get(kwargs, :set_display, true)
     title = get(kwargs, :title, "Fuel")
+    p = PG._empty_plot()
 
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
@@ -64,9 +63,6 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         kwargs...,
     )
 
-    if set_display
-        backend == Plots.PlotlyJSBackend() && Plots.PlotlyJS.plot(p)
-        display(p)
     end
     return p
 end
