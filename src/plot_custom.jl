@@ -2,6 +2,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     title = get(kwargs, :title, "Fuel")
     save_fig = get(kwargs, :save, nothing)
     p = PG._empty_plot()
+    backend = Plots.backend()
 
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
