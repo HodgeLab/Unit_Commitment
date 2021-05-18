@@ -3,7 +3,7 @@ using PowerSimulations
 using PowerSystems
 using Dates
 using CSV
-# using PowerGraphics
+using PowerGraphics
 
 ## Local
 using Xpress
@@ -75,6 +75,9 @@ UC.ext["use_storage"] = true
 UC.ext["use_storage_reserves"] = true
 
 # Build and solve the standalone problem
-build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
+build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
+
+plot_fuel(UC, storage=false, save=output_path)
+
 write_to_CSV(UC, output_path)
