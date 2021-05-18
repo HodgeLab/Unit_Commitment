@@ -1,6 +1,8 @@
 function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
     title = get(kwargs, :title, "Fuel")
     save_fig = get(kwargs, :save, nothing)
+    storage = get(kwargs, :storage, true)
+
     p = PG._empty_plot()
     backend = Plots.backend()
 
@@ -68,6 +70,25 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         set_display = false,
         kwargs...,
     )
+
+    # Add charging load line
+    if storage
+        load_and_charging = load_agg .+ sum.(eachrow(gen.data[:pb_in]))
+        DataFrames.rename!(load_and_charging, Symbol.(["Load + charging"]))
+        col = PG.match_fuel_colors(fuel_agg[!, ["Battery"]], backend)
+        p = plot_dataframe(
+            p,
+            load_and_charging,
+            gen.time;
+            seriescolor = [col],
+            y_label = y_label,
+            title = title,
+            stack = true,
+            nofill = true,
+            set_display = false,
+            kwargs...,
+        )
+    end
 
     if !isnothing(save_fig)
         title = replace(title, " " => "_")
