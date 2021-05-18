@@ -4,6 +4,7 @@ using PowerSystems
 using Dates
 using CSV
 using PowerGraphics
+plotlyjs()
 
 ## Local
 using Xpress
