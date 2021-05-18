@@ -163,7 +163,7 @@ function PSI.problem_build!(
 
     # Populate solar scenarios
     area = PSY.get_component(Area, system, "1")
-    area_solar_forecast_scenarios = ones(31, length(time_steps))
+    area_solar_forecast_scenarios = ones(31, length(time_steps)).*0.01
     #area_solar_forecast_scenarios = PSY.get_time_series_values(
     #            Scenarios,
     #            area,
@@ -821,7 +821,10 @@ function PSI.write_to_CSV(
     end
 end
 
-function get_area_total_time_series(problem, type; filter = nothing)
+function get_area_total_time_series(problem,
+    type;
+    filter = nothing
+    )
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
