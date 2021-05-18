@@ -150,40 +150,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
-    total_load = zeros(length(time_steps))
-    total_wind = zeros(length(time_steps))
-    total_hydro = zeros(length(time_steps))
-
-    for l in get_components(PowerLoad, system)
-        f = get_time_series_values(
-            Deterministic,
-            l,
-            "max_active_power";
-            start_time = case_initial_time,
-        )
-        total_load .+= f * PSY.get_max_active_power(l)
-    end
-
-    for l in
-        get_components(RenewableGen, system, x -> get_prime_mover(x) != PrimeMovers.PVe)
-        f = get_time_series_values(
-            Deterministic,
-            l,
-            "max_active_power";
-            start_time = case_initial_time,
-        )
-        total_wind .+= f * PSY.get_max_active_power(l)
-    end
-
-    for l in get_components(HydroGen, system)
-        f = get_time_series_values(
-            Deterministic,
-            l,
-            "max_active_power";
-            start_time = case_initial_time,
-        )
-        total_hydro .+= f * PSY.get_max_active_power(l)
-    end
+    total_load = get_area_total_time_series(problem, PowerLoad)
+    total_hydro = get_area_total_time_series(problem, HydroGen)
+    total_wind = get_area_total_time_series(problem, RenewableGen;
+        filter = x -> get_prime_mover(x) != PrimeMovers.PVe)
 
     # Populate solar scenarios
     area = PSY.get_component(Area, system, "1")
@@ -798,4 +768,34 @@ function PSI.write_to_CSV(
             CSV.write(file_name, df)
         end
     end
+end
+
+function get_area_total_time_series(problem,
+    type;
+    filter = nothing
+    )
+    system = PSI.get_system(problem)
+    case_initial_time = PSI.get_initial_time(problem)
+    optimization_container = PSI.get_optimization_container(problem)
+    time_steps = PSI.model_time_steps(optimization_container)
+
+    total = zeros(length(time_steps))
+
+    if isnothing(filter)
+        iter = get_components(type, system)
+    else
+        iter = get_components(type, system, filter)
+    end
+
+    for l in iter
+        f = get_time_series_values(
+            Deterministic,
+            l,
+            "max_active_power";
+            start_time = case_initial_time,
+        )
+        total .+= f * PSY.get_max_active_power(l)
+    end
+
+    return total
 end
