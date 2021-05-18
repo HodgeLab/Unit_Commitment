@@ -1,8 +1,5 @@
 
-function PG.plot_fuel(
-    problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};
-    kwargs...
-)
+function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
     p = PG._empty_plot()
     set_display = get(kwargs, :set_display, true)
     title = get(kwargs, :title, "Fuel")
@@ -13,9 +10,12 @@ function PG.plot_fuel(
 
     total_load = get_area_total_time_series(problem, PowerLoad)
     total_hydro = get_area_total_time_series(problem, HydroGen)
-    total_wind = get_area_total_time_series(problem, RenewableGen;
-    filter = x -> get_prime_mover(x) != PrimeMovers.PVe)
-    
+    total_wind = get_area_total_time_series(
+        problem,
+        RenewableGen;
+        filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
+    )
+
     gen = get_generation_data(problem, total_wind, total_hydro; kwargs...)
     cat = make_fuel_dictionary(sys)
 
@@ -29,7 +29,7 @@ function PG.plot_fuel(
     y_label = get(
         kwargs,
         :y_label,
-        PG._make_ylabel(get_base_power(sys), variable = "", time = "" ),
+        PG._make_ylabel(get_base_power(sys), variable = "", time = ""),
     )
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
@@ -49,7 +49,7 @@ function PG.plot_fuel(
     kwargs[:linewidth] = get(kwargs, :linewidth, 3)
 
     # Add load line
-    load_agg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .=  total_load
+    load_agg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_load
     DataFrames.rename!(load_agg, Symbol.(["Load"]))
     p = plot_dataframe(
         p,
@@ -71,11 +71,12 @@ function PG.plot_fuel(
     return p
 end
 
-function PG.get_generation_data(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}, 
+function PG.get_generation_data(
+    problem::PSI.OperationsProblem{CVaRUnitCommitmentCC},
     total_wind,
-    total_hydro; 
-    kwargs...)
-
+    total_hydro;
+    kwargs...,
+)
     curtailment = get(kwargs, :curtailment, true)
     storage = get(kwargs, :storage, true)
 
@@ -91,21 +92,24 @@ function PG.get_generation_data(problem::PSI.OperationsProblem{CVaRUnitCommitmen
     end
 
     variables = Dict{Symbol, DataFrames.DataFrame}()
-    for v in var_names 
+    for v in var_names
         variables[v] = PSI.axis_array_to_dataframe(jump_model.obj_dict[v], [v])
         if v == :pg
             Pg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])
             for n in names(Pg)
-                Pg[!, n] .*= get_active_power_limits(get_component(ThermalMultiStart, system, n)).min
+                Pg[!, n] .*=
+                    get_active_power_limits(get_component(ThermalMultiStart, system, n)).min
             end
             variables[v] .+= Pg
-        end  
+        end
     end
     # Hack to get shape right
-    variables[:pH] = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .=  total_hydro
+    variables[:pH] =
+        PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_hydro
 
     if curtailment
-        variables[:pW_curt] = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .-= total_wind
+        variables[:pW_curt] =
+            PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .-= total_wind
     end
 
     timestamps = get_timestamps(problem)
@@ -117,7 +121,7 @@ function my_categorize_data(
     cat::Dict;
     curtailment = true,
     slacks = true,
-    kwargs...
+    kwargs...,
 )
     storage = get(kwargs, :storage, true)
     category_dataframes = Dict{String, DataFrames.DataFrame}()

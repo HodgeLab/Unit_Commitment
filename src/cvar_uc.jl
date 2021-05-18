@@ -1,9 +1,10 @@
 struct CVaRUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
-function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};
-        use_storage = true,
-        use_storage_reserves = true
-        )
+function PSI.problem_build!(
+    problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};
+    use_storage = true,
+    use_storage_reserves = true,
+)
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
     end
@@ -89,12 +90,14 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         b in storage_names
     )
     pb_in_max = Dict(
-        b => get_input_active_power_limits(get_component(GenericBattery, system, b))[:max] for
-        b in storage_names
+        b =>
+            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max]
+        for b in storage_names
     )
     pb_out_max = Dict(
-        b => get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]  for
-        b in storage_names
+        b =>
+            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]
+        for b in storage_names
     )
     # initial conditions
     ug_t0 = Dict(
@@ -152,8 +155,11 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     # -------------------------------------------------------------
     total_load = get_area_total_time_series(problem, PowerLoad)
     total_hydro = get_area_total_time_series(problem, HydroGen)
-    total_wind = get_area_total_time_series(problem, RenewableGen;
-        filter = x -> get_prime_mover(x) != PrimeMovers.PVe)
+    total_wind = get_area_total_time_series(
+        problem,
+        RenewableGen;
+        filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
+    )
 
     # Populate solar scenarios
     area = PSY.get_component(Area, system, "1")
@@ -193,23 +199,45 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
     reg⁺ = JuMP.@variable(
         jump_model,
-        reg⁺[g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) : reg⁺_device_names), t in time_steps] >= 0
+        reg⁺[
+            g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                  reg⁺_device_names),
+            t in time_steps,
+        ] >= 0
     )
     reg⁻ = JuMP.@variable(
         jump_model,
-        reg⁻[g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) : reg⁻_device_names), t in time_steps] >= 0
+        reg⁻[
+            g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                  reg⁻_device_names),
+            t in time_steps,
+        ] >= 0
     )
     spin = JuMP.@variable(
         jump_model,
-        spin[g in (use_storage_reserves ? union(spin_device_names, storage_names) : spin_device_names), t in time_steps] >= 0
+        spin[
+            g in (use_storage_reserves ? union(spin_device_names, storage_names) :
+                  spin_device_names),
+            t in time_steps,
+        ] >= 0
     )
     supp⁺ = JuMP.@variable(
         jump_model,
-        supp⁺[g in (use_storage_reserves ? union(spin_device_names, storage_names) : spin_device_names), j in scenarios, t in time_steps] >= 0
+        supp⁺[
+            g in (use_storage_reserves ? union(spin_device_names, storage_names) :
+                  spin_device_names),
+            j in scenarios,
+            t in time_steps,
+        ] >= 0
     )
     supp⁻ = JuMP.@variable(
         jump_model,
-        supp⁻[g in (use_storage_reserves ? union(spin_device_names, storage_names) : spin_device_names), j in scenarios, t in time_steps] >= 0
+        supp⁻[
+            g in (use_storage_reserves ? union(spin_device_names, storage_names) :
+                  spin_device_names),
+            j in scenarios,
+            t in time_steps,
+        ] >= 0
     )
     total_supp⁺ =
         JuMP.@variable(jump_model, total_supp⁺[j in scenarios, t in time_steps] >= 0)
@@ -234,7 +262,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             binary = true
         )
         pb_in = JuMP.@variable(jump_model, pb_in[b in storage_names, t in time_steps] >= 0)
-        pb_out = JuMP.@variable(jump_model, pb_out[b in storage_names, t in time_steps] >= 0)
+        pb_out =
+            JuMP.@variable(jump_model, pb_out[b in storage_names, t in time_steps] >= 0)
         eb = JuMP.@variable(
             jump_model,
             eb_lim[b].min <= eb[b in storage_names, t in time_steps] <= eb_lim[b].max
@@ -283,8 +312,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             shutdown_cost[g] * wg[g, t] for g in thermal_gen_names, t in time_steps
         ) +
         C_RR * (β + 1 / (length(scenarios) * (1 - α)) * sum(z[j] for j in scenarios)) +
-        (use_slack ? C_penalty * sum(slack_reg⁺[t] for t in time_steps) : 0) +
-        (use_storage ? sum(pb_in[b, t] + pb_out[b, t] for b in storage_names, t in time_steps) : 0)
+        (use_slack ? C_penalty * sum(slack_reg⁺[t] for t in time_steps) : 0) + (
+            use_storage ?
+            sum(pb_in[b, t] + pb_out[b, t] for b in storage_names, t in time_steps) : 0
+        )
     )
 
     # Eq (7) Commitment constraints
@@ -397,20 +428,34 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     reg⁺_constraints = JuMP.@constraint(
         jump_model,
         [t in time_steps],
-        sum(reg⁺[g, t] for g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) : reg⁺_device_names)) >=
-        required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
+        sum(
+            reg⁺[g, t] for g in (
+                use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                reg⁺_device_names
+            )
+        ) >= required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
     )
     # Eq (18) Total reg down
     reg⁻_constraints = JuMP.@constraint(
         jump_model,
         [t in time_steps],
-        sum(reg⁻[g, t] for g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) : reg⁻_device_names)) >= required_reg⁻[t]
+        sum(
+            reg⁻[g, t] for g in (
+                use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                reg⁻_device_names
+            )
+        ) >= required_reg⁻[t]
     )
     # Eq (19) Total spin
     spin_constraints = JuMP.@constraint(
         jump_model,
         [t in time_steps],
-        sum(spin[g, t] for g in (use_storage_reserves ? union(spin_device_names, storage_names) : spin_device_names)) >= required_spin[t]
+        sum(
+            spin[g, t] for g in (
+                use_storage_reserves ? union(spin_device_names, storage_names) :
+                spin_device_names
+            )
+        ) >= required_spin[t]
     )
 
     # Eq (20) Reg up response time
@@ -451,13 +496,23 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     supp⁺_constraint = JuMP.@constraint(
         jump_model,
         [j in scenarios, t in time_steps],
-        sum(supp⁺[g, j, t] for g in (use_storage_reserves ? union(spin_device_names, storage_names) : spin_device_names)) >= total_supp⁺[j, t]
+        sum(
+            supp⁺[g, j, t] for g in (
+                use_storage_reserves ? union(spin_device_names, storage_names) :
+                spin_device_names
+            )
+        ) >= total_supp⁺[j, t]
     )
     # Eq (28) Total supplemental down defintion
     supp⁻_constraint = JuMP.@constraint(
         jump_model,
         [j in scenarios, t in time_steps],
-        sum(supp⁻[g, j, t] for g in (use_storage_reserves ? union(spin_device_names, storage_names) : spin_device_names)) >= total_supp⁻[j, t]
+        sum(
+            supp⁻[g, j, t] for g in (
+                use_storage_reserves ? union(spin_device_names, storage_names) :
+                spin_device_names
+            )
+        ) >= total_supp⁻[j, t]
     )
     # Eq (29) is included in supp_ variable definitions
 
@@ -467,8 +522,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         [j in scenarios, t in time_steps],
         sum(pg[g, t] + pg_lim[g].min * ug[g, t] for g in thermal_gen_names) +
         pS[j, t] +
-        pW[t] +
-        total_supp⁺[j, t] - total_supp⁻[j, t] +
+        pW[t] + total_supp⁺[j, t] - total_supp⁻[j, t] +
         total_hydro[t] +
         (use_storage ? sum(pb_out[b, t] - pb_in[b, t] for b in storage_names) : 0) ==
         total_load[t]
@@ -695,9 +749,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             storage_names,
             time_steps,
         )
-        for b in storage_names,
-            t in time_steps
-
+        for b in storage_names, t in time_steps
             if t == 1
                 storage_energy_balance[b, 1] = JuMP.@constraint(
                     jump_model,
@@ -732,14 +784,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             storage_⁺_reserve_constraints = JuMP.@constraint(
                 jump_model,
                 [b in storage_names, j in scenarios, t in time_steps],
-                reg⁺[b, t] + spin[b, t] + supp⁺[b, j, t]  <=
+                reg⁺[b, t] + spin[b, t] + supp⁺[b, j, t] <=
                 pb_out_max[b] - pb_out[b, t] + pb_in[b, t]
             )
             storage_⁻_reserve_constraints = JuMP.@constraint(
                 jump_model,
                 [b in storage_names, j in scenarios, t in time_steps],
-                reg⁻[b, t] + supp⁻[b, j, t]  <=
-                pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
+                reg⁻[b, t] + supp⁻[b, j, t] <= pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
             )
         end
     end
@@ -770,10 +821,7 @@ function PSI.write_to_CSV(
     end
 end
 
-function get_area_total_time_series(problem,
-    type;
-    filter = nothing
-    )
+function get_area_total_time_series(problem, type; filter = nothing)
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
