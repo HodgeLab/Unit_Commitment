@@ -223,8 +223,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     supp⁺ = JuMP.@variable(
         jump_model,
         supp⁺[
-            g in (use_storage_reserves ? union(spin_device_names, storage_names) :
-                  spin_device_names),
+            g in spin_device_names,
             j in scenarios,
             t in time_steps,
         ] >= 0
@@ -232,8 +231,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     supp⁻ = JuMP.@variable(
         jump_model,
         supp⁻[
-            g in (use_storage_reserves ? union(spin_device_names, storage_names) :
-                  spin_device_names),
+            g in spin_device_names,
             j in scenarios,
             t in time_steps,
         ] >= 0
@@ -496,22 +494,16 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         jump_model,
         [j in scenarios, t in time_steps],
         sum(
-            supp⁺[g, j, t] for g in (
-                use_storage_reserves ? union(spin_device_names, storage_names) :
-                spin_device_names
-            )
-        ) >= total_supp⁺[j, t]
+            supp⁺[g, j, t] for g in spin_device_names
+        ) == total_supp⁺[j, t]
     )
     # Eq (28) Total supplemental down defintion
     supp⁻_constraint = JuMP.@constraint(
         jump_model,
         [j in scenarios, t in time_steps],
         sum(
-            supp⁻[g, j, t] for g in (
-                use_storage_reserves ? union(spin_device_names, storage_names) :
-                spin_device_names
-            )
-        ) >= total_supp⁻[j, t]
+            supp⁻[g, j, t] for g in spin_device_names
+        ) == total_supp⁻[j, t]
     )
     # Eq (29) is included in supp_ variable definitions
 
@@ -780,28 +772,28 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             # Storage energy satisfies reserve deployment period
             storage_⁺_response_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, j in scenarios, t in time_steps],
+                [b in storage_names, t in time_steps],
                 η[b].out * (eb[b, t] - eb_lim[b].min) >=
-                L_REG * reg⁺[b, t] + L_SPIN * spin[b, t] + L_SUPP * supp⁺[b, j, t]
+                L_REG * reg⁺[b, t] + L_SPIN * spin[b, t]
             )
             storage_⁻_response_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, j in scenarios, t in time_steps],
+                [b in storage_names, t in time_steps],
                 (1 / η[b].in) * (eb_lim[b].max - eb[b, t]) >=
-                L_REG * reg⁻[b, t] + L_SUPP * supp⁻[b, j, t]
+                L_REG * reg⁻[b, t]
             )
 
             # Power limits on reserves storage can provide
             storage_⁺_reserve_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, j in scenarios, t in time_steps],
-                reg⁺[b, t] + spin[b, t] + supp⁺[b, j, t] <=
+                [b in storage_names, t in time_steps],
+                reg⁺[b, t] + spin[b, t] <=
                 pb_out_max[b] - pb_out[b, t] + pb_in[b, t]
             )
             storage_⁻_reserve_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, j in scenarios, t in time_steps],
-                reg⁻[b, t] + supp⁻[b, j, t] <= pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
+                [b in storage_names, t in time_steps],
+                reg⁻[b, t] <= pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
             )
         end
     end
