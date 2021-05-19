@@ -553,6 +553,18 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
     )
 
+    # Limits on downward reserves 
+    reservedn_constraint_supp = JuMP.@constraint(
+        jump_model,
+        [g in spin_device_names, j in scenarios, t in time_steps],
+        pg[g, t] - supp⁻[g, j, t] >= 0
+    )
+    reservedn_constraint_reg = JuMP.@constraint(
+        jump_model,
+        [g in reg⁻_device_names, t in time_steps],
+        pg[g, t] - reg⁻[g, t] >= 0
+    )
+
     # Eq (32) Max output 2 -- in 3 parts for 3 reserve groupings
     maxoutput2_constraint_spin = JuMP.@constraint(
         jump_model,
