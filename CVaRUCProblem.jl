@@ -65,6 +65,8 @@ UC = OperationsProblem(
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
+UC.ext["use_storage"] = true
+UC.ext["use_storage_reserves"] = true
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug

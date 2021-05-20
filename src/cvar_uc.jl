@@ -2,9 +2,10 @@ struct CVaRUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
 function PSI.problem_build!(
     problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};
-    use_storage = true,
-    use_storage_reserves = true,
 )
+    use_storage = get(problem.ext, :use_storage, true)
+    use_storage_reserves = get(problem.ext, :use_storage_reserves, true)
+
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
     end
@@ -163,7 +164,7 @@ function PSI.problem_build!(
 
     # Populate solar scenarios
     area = PSY.get_component(Area, system, "1")
-    area_solar_forecast_scenarios = ones(31, length(time_steps)).*0.01
+    area_solar_forecast_scenarios = ones(31, length(time_steps))
     #area_solar_forecast_scenarios = PSY.get_time_series_values(
     #            Scenarios,
     #            area,
@@ -821,10 +822,7 @@ function PSI.write_to_CSV(
     end
 end
 
-function get_area_total_time_series(problem,
-    type;
-    filter = nothing
-    )
+function get_area_total_time_series(problem, type; filter = nothing)
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
