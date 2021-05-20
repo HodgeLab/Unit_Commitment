@@ -15,6 +15,8 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 initial_time = "2018-04-20T00:00:00"
+use_storage = false
+use_storage_reserves = false
 
 output_path = "./results/CVaR/" * split(initial_time, "T")[1]* "/"
 if !isdir(output_path)
@@ -63,13 +65,13 @@ UC = OperationsProblem(
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
-UC.ext["use_storage"] = true
-UC.ext["use_storage_reserves"] = true
+UC.ext["use_storage"] = use_storage
+UC.ext["use_storage_reserves"] = use_storage_reserves
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
 
-plot_fuel(UC, storage=false, save=output_path)
+plot_fuel(UC, storage = use_storage, save=output_path)
 
 write_to_CSV(UC, output_path)
