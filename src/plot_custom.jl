@@ -1,4 +1,3 @@
-
 function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
     p = PG._empty_plot()
     set_display = get(kwargs, :set_display, true)
