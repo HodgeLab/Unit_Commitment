@@ -1,8 +1,8 @@
 struct CVaRUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
 function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};)
-    use_storage = get(problem.ext, :use_storage, true)
-    use_storage_reserves = get(problem.ext, :use_storage_reserves, true)
+    use_storage = get(problem.ext, "use_storage", true)
+    use_storage_reserves = get(problem.ext, "use_storage_reserves", true)
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
