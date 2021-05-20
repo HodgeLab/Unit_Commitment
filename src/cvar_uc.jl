@@ -1,8 +1,6 @@
 struct CVaRUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
-function PSI.problem_build!(
-    problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};
-)
+function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};)
     use_storage = get(problem.ext, :use_storage, true)
     use_storage_reserves = get(problem.ext, :use_storage_reserves, true)
 
