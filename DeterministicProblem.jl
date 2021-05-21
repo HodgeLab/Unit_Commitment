@@ -26,16 +26,6 @@ for system in [system_da] # [system_da, system_ha, system_ed]
     appply_manual_data_updates!(system)
 end
 
-# Set all CC's to start off
-for g in get_components(
-    ThermalMultiStart,
-    system_da,
-    x -> get_prime_mover(x) in [PrimeMovers.CT, PrimeMovers.CC],
-)
-    set_status!(g, false)
-    set_active_power!(g, 0.0)
-end
-
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
 # template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
 # template_ed = OperationsProblemTemplate(CopperPlatePowerModel)

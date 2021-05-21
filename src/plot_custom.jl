@@ -1,9 +1,13 @@
 function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
-    p = PG._empty_plot()
-    set_display = get(kwargs, :set_display, true)
     title = get(kwargs, :title, "Fuel")
+    save_fig = get(kwargs, :save, nothing)
+    storage = get(kwargs, :storage, true)
+    scenario = get(kwargs, :scenario, 1)
 
-    sys = PSI.get_system(problem)
+    p = PG._empty_plot()
+    backend = Plots.backend()
+
+    system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
 
@@ -15,8 +19,20 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
 
-    gen = get_generation_data(problem, total_wind, total_hydro; kwargs...)
-    cat = make_fuel_dictionary(sys)
+    # TODO ALSO CHANGE SCENARIO LOAD-IN HERE
+    scenario_forecast = (ones(31, 36).*0.01)[scenario, :]
+
+    gen = get_generation_data(problem,
+        total_wind,
+        total_hydro,
+        scenario,
+        scenario_forecast;
+        kwargs...)
+    cat = make_fuel_dictionary(system)
+    # Rename "other" to "battery"
+    # ! This does change the color from light to bright pink
+    cat["Battery"] = cat["Other"]
+    delete!(cat, "Other")
 
     fuel = my_categorize_data(gen.data, cat; kwargs...)
 
@@ -28,10 +44,11 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     y_label = get(
         kwargs,
         :y_label,
-        PG._make_ylabel(get_base_power(sys), variable = "", time = ""),
+        "Generation (GW)",
     )
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
+    DataFrames.rename!(fuel_agg, Dict("Imports/Exports" => "Supp⁺"))
     p = plot_dataframe(
         fuel_agg,
         gen.time;
@@ -48,7 +65,8 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     kwargs[:linewidth] = get(kwargs, :linewidth, 3)
 
     # Add load line
-    load_agg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_load
+    load_agg = (PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_load) .* 
+        get_base_power(system) ./ 1000
     DataFrames.rename!(load_agg, Symbol.(["Load"]))
     p = plot_dataframe(
         p,
@@ -63,9 +81,29 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         kwargs...,
     )
 
-    if set_display
-        backend == Plots.PlotlyJSBackend() && Plots.PlotlyJS.plot(p)
-        display(p)
+    # Add charging load line
+    if storage
+        load_and_charging = load_agg .+ sum.(eachrow(gen.data[:pb_in]))
+        DataFrames.rename!(load_and_charging, Symbol.(["Load + charging"]))
+        col = PG.match_fuel_colors(fuel_agg[!, ["Battery"]], backend)
+        p = plot_dataframe(
+            p,
+            load_and_charging,
+            gen.time;
+            seriescolor = [col],
+            y_label = y_label,
+            title = title,
+            stack = true,
+            nofill = true,
+            set_display = false,
+            kwargs...,
+        )
+    end
+
+    if !isnothing(save_fig)
+        title = replace(title, " " => "_")
+        format = get(kwargs, :format, "png")
+        PG.save_plot(p, joinpath(save_fig, "$title.$format"), backend; kwargs...)
     end
     return p
 end
@@ -73,7 +111,9 @@ end
 function PG.get_generation_data(
     problem::PSI.OperationsProblem{CVaRUnitCommitmentCC},
     total_wind,
-    total_hydro;
+    total_hydro,
+    scenario,
+    scenario_forecast;
     kwargs...,
 )
     curtailment = get(kwargs, :curtailment, true)
@@ -85,7 +125,7 @@ function PG.get_generation_data(
 
     # Power variable names
     var_names = Vector{Symbol}()
-    push!(var_names, :pg, :pS, :pW)
+    push!(var_names, :pg, :pW)
     if storage
         push!(var_names, :pb_in, :pb_out)
     end
@@ -102,13 +142,25 @@ function PG.get_generation_data(
             variables[v] .+= Pg
         end
     end
+    # Select single solar scenario
+    variables[:pS] =  PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[:, [scenario]]
+    # Supp is 3D transformed to 2D; select single scenario out
+    x = PSI.axis_array_to_dataframe(jump_model.obj_dict[:supp⁺], [:supp⁺])
+    variables[:supp⁺] = x[x[!, :S1].==scenario, names(x) .!= "S1"]
+
     # Hack to get shape right
     variables[:pH] =
         PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_hydro
 
     if curtailment
-        variables[:pW_curt] =
-            PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .-= total_wind
+        variables[:curt] = DataFrame(
+            "curt" => total_wind  - variables[:pW][!, 1] + scenario_forecast - variables[:pS][!, 1]
+        )    
+    end
+
+    # Scale from 100 MW to GW
+    for v in keys(variables)
+        variables[v] .*= get_base_power(system) ./ 1000
     end
 
     timestamps = get_timestamps(problem)
@@ -147,8 +199,11 @@ function my_categorize_data(
     end
     category_dataframes["Wind"] = data[:pW]
     category_dataframes["Hydropower"] = data[:pH]
+    category_dataframes["PV"] = data[:pS]
+    # Hack to match color, will be renamed
+    category_dataframes["Imports/Exports"] = data[:supp⁺]
     if curtailment
-        category_dataframes["Curtailment"] = data[:pW_curt]
+        category_dataframes["Curtailment"] = data[:curt]
     end
 
     return category_dataframes

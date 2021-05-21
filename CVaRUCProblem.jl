@@ -3,7 +3,9 @@ using PowerSimulations
 using PowerSystems
 using Dates
 using CSV
-# using PowerGraphics
+using DataFrames
+using PowerGraphics
+plotlyjs()
 
 ## Local
 using Xpress
@@ -12,7 +14,15 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-output_path = "./results/CVaR"
+initial_time = "2018-04-20T00:00:00"
+use_storage = false
+use_storage_reserves = false
+
+output_path = "./results/CVaR/" * split(initial_time, "T")[1]* "/"
+if !isdir(output_path)
+    mkpath(output_path)
+end
+
 ## Jose
 # system_file_path = "/Users/jdlara/cache/blue_texas/"
 ## Kate
@@ -25,16 +35,6 @@ system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_o
 # Jose's tune-ups for the HA UC
 for system in [system_da] # [system_da, system_ha, system_ed]
     appply_manual_data_updates!(system)
-end
-
-# Set all CC's to start off
-for g in get_components(
-    ThermalMultiStart,
-    system_da,
-    x -> get_prime_mover(x) in [PrimeMovers.CT, PrimeMovers.CC],
-)
-    set_status!(g, false)
-    set_active_power!(g, 0.0)
 end
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
@@ -59,16 +59,19 @@ UC = OperationsProblem(
     template_dauc,
     system_da,
     optimizer = solver,
-    initial_time = DateTime("2018-04-20T00:00:00"),
+    initial_time = DateTime(initial_time),
     optimizer_log_print = true,
     balance_slack_variables = false,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
-UC.ext["use_storage"] = true
-UC.ext["use_storage_reserves"] = true
+UC.ext["use_storage"] = use_storage
+UC.ext["use_storage_reserves"] = use_storage_reserves
 
 # Build and solve the standalone problem
-build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
+build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
+
+plot_fuel(UC, storage = use_storage, save=output_path)
+
 write_to_CSV(UC, output_path)
