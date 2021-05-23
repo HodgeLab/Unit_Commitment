@@ -20,14 +20,16 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     )
 
     # TODO ALSO CHANGE SCENARIO LOAD-IN HERE
-    scenario_forecast = (ones(31, 36).*0.01)[scenario, :]
+    scenario_forecast = (ones(31, 36) .* 0.01)[scenario, :]
 
-    gen = get_generation_data(problem,
+    gen = get_generation_data(
+        problem,
         total_wind,
         total_hydro,
         scenario,
         scenario_forecast;
-        kwargs...)
+        kwargs...,
+    )
     cat = make_fuel_dictionary(system)
     # Rename "other" to "battery"
     # ! This does change the color from light to bright pink
@@ -41,11 +43,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     cat_names = [cat_names[2], cat_names[1], cat_names[3:end]...]
     fuel_agg = PG.combine_categories(fuel; names = cat_names)
 
-    y_label = get(
-        kwargs,
-        :y_label,
-        "Generation (GW)",
-    )
+    y_label = get(kwargs, :y_label, "Generation (GW)")
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
     DataFrames.rename!(fuel_agg, Dict("Imports/Exports" => "Supp⁺"))
@@ -65,7 +63,8 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     kwargs[:linewidth] = get(kwargs, :linewidth, 3)
 
     # Add load line
-    load_agg = (PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_load) .* 
+    load_agg =
+        (PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW]) .= total_load) .*
         get_base_power(system) ./ 1000
     DataFrames.rename!(load_agg, Symbol.(["Load"]))
     p = plot_dataframe(
@@ -143,10 +142,11 @@ function PG.get_generation_data(
         end
     end
     # Select single solar scenario
-    variables[:pS] =  PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[:, [scenario]]
+    variables[:pS] =
+        PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[:, [scenario]]
     # Supp is 3D transformed to 2D; select single scenario out
     x = PSI.axis_array_to_dataframe(jump_model.obj_dict[:supp⁺], [:supp⁺])
-    variables[:supp⁺] = x[x[!, :S1].==scenario, names(x) .!= "S1"]
+    variables[:supp⁺] = x[x[!, :S1] .== scenario, names(x) .!= "S1"]
 
     # Hack to get shape right
     variables[:pH] =
@@ -154,8 +154,10 @@ function PG.get_generation_data(
 
     if curtailment
         variables[:curt] = DataFrame(
-            "curt" => total_wind  - variables[:pW][!, 1] + scenario_forecast - variables[:pS][!, 1]
-        )    
+            "curt" =>
+                total_wind - variables[:pW][!, 1] + scenario_forecast -
+                variables[:pS][!, 1],
+        )
     end
 
     # Scale from 100 MW to GW
