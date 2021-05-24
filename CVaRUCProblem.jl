@@ -1,3 +1,5 @@
+# To run: julia --project CVaRUCProblem.jl true true true true
+
 include("src/Unit_commitment.jl")
 using PowerSimulations
 using PowerSystems
@@ -15,12 +17,16 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 initial_time = "2018-04-20T00:00:00"
-use_storage = false
-use_storage_reserves = false
-use_reg = false
-use_spin = false
+use_storage = isempty(ARGS) ? false : ARGS[1]
+use_storage_reserves = isempty(ARGS) ? false : ARGS[2]
+use_reg = isempty(ARGS) ? false : ARGS[3]
+use_spin = isempty(ARGS) ? false : ARGS[4]
+optional_title = (use_storage ? " stor" : "") *
+                (use_storage_reserves ? " storres" : "") *
+                (use_reg ? " reg" : "") *
+                (use_spin ? " spin" : "")
 
-output_path = "./results/CVaR/" * split(initial_time, "T")[1]* "/"
+output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
@@ -30,7 +36,7 @@ end
 ## Kate
 system_file_path = "data/"
 
-system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_only = true)
+system_da = System(joinpath(system_file_path, "DA_sys_84_scenarios.json"); time_series_read_only = true)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
 # system_ed = System("data/RT_sys.json"; time_series_read_only = true)
 
@@ -63,7 +69,7 @@ UC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = true,
-    balance_slack_variables = false,
+    balance_slack_variables = true,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
@@ -76,6 +82,18 @@ UC.ext["use_spin"] = use_spin
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
 solve!(UC)
 
-plot_fuel(UC, storage = use_storage, save=output_path)
+plot_fuel(UC; 
+    case_initial_time = DateTime(initial_time), 
+    storage = use_storage,
+    scenario = 1,
+    save=output_path
+)
+
+plot_fuel(UC; 
+    case_initial_time = DateTime(initial_time), 
+    storage = use_storage,
+    scenario = 80,
+    save=output_path
+)
 
 write_to_CSV(UC, output_path)
