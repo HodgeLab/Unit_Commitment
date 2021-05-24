@@ -3,6 +3,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     save_fig = get(kwargs, :save, nothing)
     storage = get(kwargs, :storage, true)
     scenario = get(kwargs, :scenario, 1)
+    case_initial_time = get(kwargs, :case_initial_time, nothing)
 
     p = PG._empty_plot()
     backend = Plots.backend()
@@ -19,8 +20,13 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
 
-    # TODO ALSO CHANGE SCENARIO LOAD-IN HERE
-    scenario_forecast = (ones(31, 36).*0.01)[scenario, :]
+    area = PSY.get_component(Area, system, "1")
+    scenario_forecast = permutedims(PSY.get_time_series_values(
+               Scenarios,
+               area,
+               "solar_power";
+               start_time = case_initial_time
+    ) ./ 100)[scenario, :]
 
     gen = get_generation_data(problem,
         total_wind,
@@ -31,8 +37,10 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     cat = make_fuel_dictionary(system)
     # Rename "other" to "battery"
     # ! This does change the color from light to bright pink
-    cat["Battery"] = cat["Other"]
-    delete!(cat, "Other")
+    if storage
+        cat["Battery"] = cat["Other"]
+        delete!(cat, "Other")
+    end
 
     fuel = my_categorize_data(gen.data, cat; kwargs...)
 

@@ -22,8 +22,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     resolution = PSI.model_resolution(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
-    # Sets
-    scenarios = 1:31
+    # Populate solar scenarios
+    area = PSY.get_component(Area, system, "1")
+    area_solar_forecast_scenarios = permutedims(PSY.get_time_series_values(
+               Scenarios,
+               area,
+               "solar_power";
+               start_time = case_initial_time
+    ) ./ 100)
+    scenarios = 1:size(area_solar_forecast_scenarios)[1]
 
     # Constants
     MINS_IN_HOUR = 60.0
@@ -159,16 +166,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         RenewableGen;
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
-
-    # Populate solar scenarios
-    area = PSY.get_component(Area, system, "1")
-    area_solar_forecast_scenarios = ones(31, length(time_steps))
-    #area_solar_forecast_scenarios = PSY.get_time_series_values(
-    #            Scenarios,
-    #            area,
-    #            "solar_power";
-    #            start_time = case_initial_time,
-    #) / 100
 
     # -------------------------------------------------------------
     # Variables
