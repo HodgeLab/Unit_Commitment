@@ -17,10 +17,10 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 initial_time = "2018-04-20T00:00:00"
-use_storage = isempty(ARGS) ? false : ARGS[1]
-use_storage_reserves = isempty(ARGS) ? false : ARGS[2]
-use_reg = isempty(ARGS) ? false : ARGS[3]
-use_spin = isempty(ARGS) ? false : ARGS[4]
+use_storage = isempty(ARGS) ? false : (ARGS[1] == "true")
+use_storage_reserves = isempty(ARGS) ? false : (ARGS[2] == "true")
+use_reg = isempty(ARGS) ? false : (ARGS[3] == "true")
+use_spin = isempty(ARGS) ? false : (ARGS[4] == "true")
 optional_title = (use_storage ? " stor" : "") *
                 (use_storage_reserves ? " storres" : "") *
                 (use_reg ? " reg" : "") *
