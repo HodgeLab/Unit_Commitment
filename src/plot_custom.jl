@@ -1,6 +1,6 @@
 function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
     title = get(kwargs, :title, "Fuel")
-    save_fig = get(kwargs, :save, nothing)
+    save_dir = get(kwargs, :save_dir, nothing)
     storage = get(kwargs, :storage, true)
     scenario = get(kwargs, :scenario, 1)
     case_initial_time = get(kwargs, :case_initial_time, nothing)
@@ -102,10 +102,10 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         )
     end
 
-    if !isnothing(save_fig)
+    if !isnothing(save_dir)
         title = replace(title, " " => "_")
         format = get(kwargs, :format, "png")
-        PG.save_plot(p, joinpath(save_fig, "$title Scenario $scenario.$format"), backend; kwargs...)
+        PG.save_plot(p, joinpath(save_dir, "$title Scenario $scenario.$format"), backend; kwargs...)
     end
     return p
 end
