@@ -17,6 +17,8 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 initial_time = "2018-04-20T00:00:00"
 use_storage = false
 use_storage_reserves = false
+use_reg = false
+use_spin = false
 
 output_path = "./results/CVaR/" * split(initial_time, "T")[1]* "/"
 if !isdir(output_path)
@@ -67,6 +69,8 @@ UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
+UC.ext["use_reg"] = use_reg
+UC.ext["use_spin"] = use_spin
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
