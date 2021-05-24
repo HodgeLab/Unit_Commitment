@@ -347,7 +347,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
 
     # Eq (8) Must-run
     for g in must_run_gen_names, t in time_steps
-        JuMP.fix(ug[g, t], 1.0)
+        JuMP.fix(ug[g, t], 1.0; force = true)
     end
 
     # Eq (9) - (10), up and down time constraints
@@ -424,7 +424,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         end
         # Initial start-up type, based on Tight and Compact eq (15) rather than pg_lib (7)
         if (g_startup[si + 1] - time_down_t0[g]) < t && t < g_startup[si + 1]
-            JuMP.fix(δ_sg[g, startup, t], 0.0)
+            JuMP.fix(δ_sg[g, startup, t], 0.0; force = true)
         end
     end
 
