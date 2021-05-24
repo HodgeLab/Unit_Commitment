@@ -149,26 +149,25 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
 
     required_reg⁺ =
-        get_requirement(reg_reserve_up) * get_time_series_values(
+        get_time_series_values(
             Deterministic,
             reg_reserve_up,
             "requirement";
             start_time = case_initial_time,
         )
     required_reg⁻ =
-        get_requirement(reg_reserve_dn) * get_time_series_values(
+        get_time_series_values(
             Deterministic,
             reg_reserve_dn,
             "requirement";
             start_time = case_initial_time,
         )
     required_spin =
-        get_requirement(spin_reserve) * get_time_series_values(
+        get_time_series_values(
             Deterministic,
             spin_reserve,
             "requirement";
             start_time = case_initial_time,
-        )
 
     # -------------------------------------------------------------
     # Time-series data
@@ -877,13 +876,12 @@ function get_area_total_time_series(problem, type; filter = nothing)
     end
 
     for l in iter
-        f = get_time_series_values(
+        total .+= get_time_series_values(
             Deterministic,
             l,
             "max_active_power";
             start_time = case_initial_time,
         )
-        total .+= f * PSY.get_max_active_power(l)
     end
 
     return total
