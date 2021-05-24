@@ -105,7 +105,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     if !isnothing(save_fig)
         title = replace(title, " " => "_")
         format = get(kwargs, :format, "png")
-        PG.save_plot(p, joinpath(save_fig, "$title.$format"), backend; kwargs...)
+        PG.save_plot(p, joinpath(save_fig, "$title Scenario $scenario.$format"), backend; kwargs...)
     end
     return p
 end

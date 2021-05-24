@@ -86,14 +86,14 @@ plot_fuel(UC;
     case_initial_time = DateTime(initial_time), 
     storage = use_storage,
     scenario = 1,
-    save=output_path
+    save = output_path
 )
 
 plot_fuel(UC; 
     case_initial_time = DateTime(initial_time), 
     storage = use_storage,
     scenario = 80,
-    save=output_path
+    save = output_path
 )
 
 write_to_CSV(UC, output_path)
