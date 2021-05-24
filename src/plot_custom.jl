@@ -35,12 +35,6 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         scenario_forecast;
         kwargs...)
     cat = make_fuel_dictionary(system)
-    # Rename "other" to "battery"
-    # ! This does change the color from light to bright pink
-    if storage
-        cat["Battery"] = cat["Other"]
-        delete!(cat, "Other")
-    end
 
     fuel = my_categorize_data(gen.data, cat; kwargs...)
 
@@ -93,7 +87,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     if storage
         load_and_charging = load_agg .+ sum.(eachrow(gen.data[:pb_in]))
         DataFrames.rename!(load_and_charging, Symbol.(["Load + charging"]))
-        col = PG.match_fuel_colors(fuel_agg[!, ["Battery"]], backend)
+        col = PG.match_fuel_colors(fuel_agg[!, ["Storage"]], backend)
         p = plot_dataframe(
             p,
             load_and_charging,
