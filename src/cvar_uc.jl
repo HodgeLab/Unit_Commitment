@@ -168,7 +168,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             spin_reserve,
             "requirement";
             start_time = case_initial_time,
-
+        )
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
