@@ -80,20 +80,22 @@ UC.ext["use_spin"] = use_spin
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
-solve!(UC)
+status = solve!(UC)
 
-plot_fuel(UC; 
-    case_initial_time = DateTime(initial_time), 
-    storage = use_storage,
-    scenario = 1,
-    save_dir = output_path
-)
+if status.value == 0
+    plot_fuel(UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        scenario = 1,
+        save_dir = output_path
+    )
 
-plot_fuel(UC; 
-    case_initial_time = DateTime(initial_time), 
-    storage = use_storage,
-    scenario = 80,
-    save_dir = output_path
-)
+    plot_fuel(UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        scenario = 80,
+        save_dir = output_path
+    )
 
-write_to_CSV(UC, output_path)
+    write_to_CSV(UC, output_path)
+end
