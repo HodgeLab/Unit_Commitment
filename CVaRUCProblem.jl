@@ -1,4 +1,4 @@
-# To run: julia --project CVaRUCProblem.jl true true true true
+# To run: julia --project CVaRUCProblem.jl true true true true true 1000 0.25 0.20
 
 include("src/Unit_commitment.jl")
 using PowerSimulations

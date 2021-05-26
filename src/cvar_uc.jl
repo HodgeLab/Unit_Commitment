@@ -6,7 +6,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     use_reg = get(problem.ext, "use_reg", true)
     use_spin = get(problem.ext, "use_spin", true)
     use_must_run = get(problem.ext, "use_must_run", true)
-    C_RR = get(problem.ext, "L_SUPP", 1000) # Penalty cost of recourse reserve
+    C_RR = get(problem.ext, "C_RR", 1000) # Penalty cost of recourse reserve
     L_SUPP = get(problem.ext, "L_SUPP", 1 / 4) # 15 min, to start
     α = get(problem.ext, "α", 0.20)
 
