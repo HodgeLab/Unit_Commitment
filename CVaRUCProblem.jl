@@ -21,10 +21,12 @@ use_storage = isempty(ARGS) ? false : (ARGS[1] == "true")
 use_storage_reserves = isempty(ARGS) ? false : (ARGS[2] == "true")
 use_reg = isempty(ARGS) ? false : (ARGS[3] == "true")
 use_spin = isempty(ARGS) ? false : (ARGS[4] == "true")
+use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 optional_title = (use_storage ? " stor" : "") *
                 (use_storage_reserves ? " storres" : "") *
                 (use_reg ? " reg" : "") *
-                (use_spin ? " spin" : "")
+                (use_spin ? " spin" : "") *
+                (!use_must_run ? " no must run" : "")
 
 output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
@@ -77,6 +79,7 @@ UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
 UC.ext["use_reg"] = use_reg
 UC.ext["use_spin"] = use_spin
+UC.ext["use_must_run"] = use_must_run
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug

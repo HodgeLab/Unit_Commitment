@@ -5,6 +5,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     use_storage_reserves = get(problem.ext, "use_storage_reserves", true)
     use_reg = get(problem.ext, "use_reg", true)
     use_spin = get(problem.ext, "use_spin", true)
+    use_must_run = get(problem.ext, "use_must_run", true)
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
@@ -72,8 +73,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         g => get_power_trajectory(get_component(ThermalMultiStart, system, g)) for
         g in thermal_gen_names
     )
-    must_run_gen_names =
-        get_name.(get_components(ThermalMultiStart, system, x -> PSY.get_must_run(x)))
+    if use_must_run
+        must_run_gen_names =
+            get_name.(get_components(ThermalMultiStart, system, x -> PSY.get_must_run(x)))
+    end
     startup_categories = (:hot, :warm, :cold)
     no_load_cost = Dict(
         g => get_no_load(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
@@ -337,9 +340,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         end
     end
 
-    # Eq (8) Must-run
-    for g in must_run_gen_names, t in time_steps
-        JuMP.fix(ug[g, t], 1.0; force = true)
+    # Eq (8) Must-run -- added as a constraint for Xpress due to fix not working
+    if use_must_run
+        if JuMP.solver_name(jump_model) == "Xpress"
+            JuMP.@constraint(jump_model, [g in must_run_gen_names, t in time_steps], ug[g, t] >= 1)
+        else
+            for g in must_run_gen_names, t in time_steps
+                JuMP.fix(ug[g, t], 1.0; force = true)
+            end
+        end
     end
 
     # Eq (9) - (10), up and down time constraints
@@ -414,9 +423,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
                 δ_sg[g, startup, t] <= sum(wg[g, t - i] for i in time_range)
             )
         end
+
         # Initial start-up type, based on Tight and Compact eq (15) rather than pg_lib (7)
+        # Xpress version adds extra constraints because it's not enforcing the fix
         if (g_startup[si + 1] - time_down_t0[g]) < t && t < g_startup[si + 1]
-            JuMP.fix(δ_sg[g, startup, t], 0.0; force = true)
+            if JuMP.solver_name(jump_model) == "Xpress"
+                JuMP.@constraint(jump_model,  δ_sg[g, startup, t] <= 0)
+            else
+                JuMP.fix(δ_sg[g, startup, t], 0.0; force = true)
+            end
         end
     end
 
