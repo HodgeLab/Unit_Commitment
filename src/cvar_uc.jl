@@ -46,7 +46,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     Δt = 1
     L_REG = 1 / 12 # 5 min
     L_SPIN = 1 / 6 # 10 min
-    C_penalty = 5000
+    C_res_penalty = 5000
+    C_ener_penalty = 9000
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
@@ -259,6 +260,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
     if use_slack
         slack_reg⁺ = JuMP.@variable(jump_model, slack_reg⁺[t in time_steps] >= 0)
+        slack_reg⁻ = JuMP.@variable(jump_model, slack_reg⁻[t in time_steps] >= 0)
+        slack_spin = JuMP.@variable(jump_model, slack_spin[t in time_steps] >= 0)
+        slack_energy⁺ = JuMP.@variable(jump_model, slack_energy⁺[t in time_steps] >= 0)
+        slack_energy⁻ = JuMP.@variable(jump_model, slack_energy⁻[t in time_steps] >= 0)
     end
     if use_storage
         # 1==discharge, 0==charge
@@ -318,7 +323,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             shutdown_cost[g] * wg[g, t] for g in thermal_gen_names, t in time_steps
         ) +
         C_RR * (β + 1 / (length(scenarios) * (1 - α)) * sum(z[j] for j in scenarios)) +
-        (use_slack ? C_penalty * sum(slack_reg⁺[t] for t in time_steps) : 0) + (
+        (use_slack ? C_res_penalty * sum(
+            slack_reg⁺[t] + slack_reg⁻[t] + slack_spin[t] for t in time_steps) +
+            C_ener_penalty * sum(slack_energy⁺[t] + slack_energy⁻[t] for t in time_steps) : 0) + (
             use_storage ?
             sum(pb_in[b, t] + pb_out[b, t] for b in storage_names, t in time_steps) : 0
         )
@@ -463,7 +470,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
                     use_storage_reserves ? union(reg⁻_device_names, storage_names) :
                     reg⁻_device_names
                 )
-            ) >= required_reg⁻[t]
+            ) >= required_reg⁻[t] - (use_slack ? slack_reg⁻[t] : 0)
         )
         # Eq (20) Reg up response time
         reg⁺_response_constraints = JuMP.@constraint(
@@ -488,7 +495,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
                     use_storage_reserves ? union(spin_device_names, storage_names) :
                     spin_device_names
                 )
-            ) >= required_spin[t]
+            ) >= required_spin[t] - (use_slack ? slack_spin[t] : 0)
         )
         # Eq (22) Spin response time
         spin_response_constraints = JuMP.@constraint(
@@ -534,9 +541,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         sum(pg[g, t] + pg_lim[g].min * ug[g, t] for g in thermal_gen_names) +
         pS[j, t] +
         pW[t] + total_supp⁺[j, t] - total_supp⁻[j, t] +
-        total_hydro[t] +
+        total_hydro[t] + slack_energy⁺[t] +
         (use_storage ? sum(pb_out[b, t] - pb_in[b, t] for b in storage_names) : 0) ==
-        total_load[t]
+        total_load[t] + slack_energy⁻[t]
     )
 
     # Eq (31) Max output 1 -- in 3 parts for 3 reserve groupings
