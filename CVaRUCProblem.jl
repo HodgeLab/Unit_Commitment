@@ -1,3 +1,5 @@
+# To run: julia --project CVaRUCProblem.jl true true true true
+
 include("src/Unit_commitment.jl")
 using PowerSimulations
 using PowerSystems
@@ -15,10 +17,23 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 initial_time = "2018-04-20T00:00:00"
-use_storage = false
-use_storage_reserves = false
+use_storage = isempty(ARGS) ? false : parse(Bool, ARGS[1])
+use_storage_reserves = isempty(ARGS) ? false : parse(Bool, ARGS[2])
+use_reg = isempty(ARGS) ? false : parse(Bool, ARGS[3])
+use_spin = isempty(ARGS) ? false : parse(Bool, ARGS[4])
+use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
+C_RR = isempty(ARGS) ? 1000 : parse(Float64, ARGS[6]) # Penalty cost of recourse reserve
+L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[7]) # 15 min response time, to start
+α = isempty(ARGS) ? 0.20 : parse(Float64, ARGS[7]) # Risk tolerance level
 
-output_path = "./results/CVaR/" * split(initial_time, "T")[1] * "/"
+optional_title =
+    (use_storage ? " stor" : "") *
+    (use_storage_reserves ? " storres" : "") *
+    (use_reg ? " reg" : "") *
+    (use_spin ? " spin" : "") *
+    (!use_must_run ? " no must run" : "")
+
+output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
@@ -28,7 +43,10 @@ end
 ## Kate
 system_file_path = "data/"
 
-system_da = System(joinpath(system_file_path, "DA_sys.json"); time_series_read_only = true)
+system_da = System(
+    joinpath(system_file_path, "DA_sys_84_scenarios.json");
+    time_series_read_only = true,
+)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
 # system_ed = System("data/RT_sys.json"; time_series_read_only = true)
 
@@ -61,17 +79,39 @@ UC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = true,
-    balance_slack_variables = false,
+    balance_slack_variables = true,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
+UC.ext["use_reg"] = use_reg
+UC.ext["use_spin"] = use_spin
+UC.ext["use_must_run"] = use_must_run
+UC.ext["C_RR"] = C_RR
+UC.ext["L_SUPP"] = L_SUPP
+UC.ext["α"] = α
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
-solve!(UC)
+status = solve!(UC)
 
-plot_fuel(UC, storage = use_storage, save = output_path)
+if status.value == 0
+    plot_fuel(
+        UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        scenario = 1,
+        save_dir = output_path,
+    )
 
-write_to_CSV(UC, output_path)
+    plot_fuel(
+        UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        scenario = 80,
+        save_dir = output_path,
+    )
+
+    write_to_CSV(UC, output_path)
+end

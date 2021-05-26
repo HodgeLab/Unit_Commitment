@@ -3,9 +3,18 @@ struct CVaRUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};)
     use_storage = get(problem.ext, "use_storage", true)
     use_storage_reserves = get(problem.ext, "use_storage_reserves", true)
+    use_reg = get(problem.ext, "use_reg", true)
+    use_spin = get(problem.ext, "use_spin", true)
+    use_must_run = get(problem.ext, "use_must_run", true)
+    C_RR = get(problem.ext, "L_SUPP", 1000) # Penalty cost of recourse reserve
+    L_SUPP = get(problem.ext, "L_SUPP", 1 / 4) # 15 min, to start
+    α = get(problem.ext, "α", 0.20)
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
+    end
+    if use_storage_reserves && !(use_reg || use_spin)
+        throw(ArgumentError("Can only use storage reserves if a reserve category is on"))
     end
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
@@ -22,18 +31,25 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     resolution = PSI.model_resolution(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
-    # Sets
-    scenarios = 1:31
+    # Populate solar scenarios
+    area = PSY.get_component(Area, system, "1")
+    area_solar_forecast_scenarios = permutedims(
+        PSY.get_time_series_values(
+            Scenarios,
+            area,
+            "solar_power";
+            start_time = case_initial_time,
+        ) ./ 100,
+    )
+    scenarios = 1:size(area_solar_forecast_scenarios)[1]
 
     # Constants
     MINS_IN_HOUR = 60.0
     Δt = 1
     L_REG = 1 / 12 # 5 min
     L_SPIN = 1 / 6 # 10 min
-    L_SUPP = 1 / 4 # 15 min, to start
-    C_RR = 1000 # Penalty cost of recourse reserve
-    α = 0.20 # Risk tolerance level
-    C_penalty = 5000
+    C_res_penalty = 5000
+    C_ener_penalty = 9000
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
@@ -60,8 +76,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         g => get_power_trajectory(get_component(ThermalMultiStart, system, g)) for
         g in thermal_gen_names
     )
-    must_run_gen_names =
-        get_name.(get_components(ThermalMultiStart, system, x -> PSY.get_must_run(x)))
+    if use_must_run
+        must_run_gen_names =
+            get_name.(get_components(ThermalMultiStart, system, x -> PSY.get_must_run(x)))
+    end
     startup_categories = (:hot, :warm, :cold)
     no_load_cost = Dict(
         g => get_no_load(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
@@ -126,29 +144,40 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
     reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
     spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
+    no_res⁺_device_names = setdiff(
+        thermal_gen_names,
+        union(
+            use_reg ? reg⁺_device_names : Vector{String}(),
+            use_spin ? spin_device_names : Vector{String}(),
+        ),
+    )
+    # This still assumes the supp⁻ set is the spin set
+    no_res⁻_device_names = setdiff(
+        thermal_gen_names,
+        union(
+            use_reg ? reg⁻_device_names : Vector{String}(),
+            use_spin ? spin_device_names : Vector{String}(),
+        ),
+    )
 
-    required_reg⁺ =
-        get_requirement(reg_reserve_up) * get_time_series_values(
-            Deterministic,
-            reg_reserve_up,
-            "requirement";
-            start_time = case_initial_time,
-        )
-    required_reg⁻ =
-        get_requirement(reg_reserve_dn) * get_time_series_values(
-            Deterministic,
-            reg_reserve_dn,
-            "requirement";
-            start_time = case_initial_time,
-        )
-    required_spin =
-        get_requirement(spin_reserve) * get_time_series_values(
-            Deterministic,
-            spin_reserve,
-            "requirement";
-            start_time = case_initial_time,
-        )
-
+    required_reg⁺ = get_time_series_values(
+        Deterministic,
+        reg_reserve_up,
+        "requirement";
+        start_time = case_initial_time,
+    )
+    required_reg⁻ = get_time_series_values(
+        Deterministic,
+        reg_reserve_dn,
+        "requirement";
+        start_time = case_initial_time,
+    )
+    required_spin = get_time_series_values(
+        Deterministic,
+        spin_reserve,
+        "requirement";
+        start_time = case_initial_time,
+    )
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
@@ -159,16 +188,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         RenewableGen;
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
-
-    # Populate solar scenarios
-    area = PSY.get_component(Area, system, "1")
-    area_solar_forecast_scenarios = ones(31, length(time_steps))
-    #area_solar_forecast_scenarios = PSY.get_time_series_values(
-    #            Scenarios,
-    #            area,
-    #            "solar_power";
-    #            start_time = case_initial_time,
-    #) / 100
 
     # -------------------------------------------------------------
     # Variables
@@ -196,30 +215,34 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, t in time_steps] >= 0) # power ABOVE MINIMUM
     pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
     pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
-    reg⁺ = JuMP.@variable(
-        jump_model,
-        reg⁺[
-            g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) :
-                  reg⁺_device_names),
-            t in time_steps,
-        ] >= 0
-    )
-    reg⁻ = JuMP.@variable(
-        jump_model,
-        reg⁻[
-            g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) :
-                  reg⁻_device_names),
-            t in time_steps,
-        ] >= 0
-    )
-    spin = JuMP.@variable(
-        jump_model,
-        spin[
-            g in (use_storage_reserves ? union(spin_device_names, storage_names) :
-                  spin_device_names),
-            t in time_steps,
-        ] >= 0
-    )
+    if use_reg
+        reg⁺ = JuMP.@variable(
+            jump_model,
+            reg⁺[
+                g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                      reg⁺_device_names),
+                t in time_steps,
+            ] >= 0
+        )
+        reg⁻ = JuMP.@variable(
+            jump_model,
+            reg⁻[
+                g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                      reg⁻_device_names),
+                t in time_steps,
+            ] >= 0
+        )
+    end
+    if use_spin
+        spin = JuMP.@variable(
+            jump_model,
+            spin[
+                g in (use_storage_reserves ? union(spin_device_names, storage_names) :
+                      spin_device_names),
+                t in time_steps,
+            ] >= 0
+        )
+    end
     supp⁺ = JuMP.@variable(
         jump_model,
         supp⁺[g in spin_device_names, j in scenarios, t in time_steps] >= 0
@@ -242,6 +265,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
     if use_slack
         slack_reg⁺ = JuMP.@variable(jump_model, slack_reg⁺[t in time_steps] >= 0)
+        slack_reg⁻ = JuMP.@variable(jump_model, slack_reg⁻[t in time_steps] >= 0)
+        slack_spin = JuMP.@variable(jump_model, slack_spin[t in time_steps] >= 0)
+        slack_energy⁺ = JuMP.@variable(jump_model, slack_energy⁺[t in time_steps] >= 0)
+        slack_energy⁻ = JuMP.@variable(jump_model, slack_energy⁻[t in time_steps] >= 0)
     end
     if use_storage
         # 1==discharge, 0==charge
@@ -301,7 +328,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             shutdown_cost[g] * wg[g, t] for g in thermal_gen_names, t in time_steps
         ) +
         C_RR * (β + 1 / (length(scenarios) * (1 - α)) * sum(z[j] for j in scenarios)) +
-        (use_slack ? C_penalty * sum(slack_reg⁺[t] for t in time_steps) : 0) + (
+        (
+            use_slack ?
+            C_res_penalty *
+            sum(slack_reg⁺[t] + slack_reg⁻[t] + slack_spin[t] for t in time_steps) +
+            C_ener_penalty * sum(slack_energy⁺[t] + slack_energy⁻[t] for t in time_steps) : 0
+        ) + (
             use_storage ?
             sum(pb_in[b, t] + pb_out[b, t] for b in storage_names, t in time_steps) : 0
         )
@@ -323,9 +355,19 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         end
     end
 
-    # Eq (8) Must-run
-    for g in must_run_gen_names, t in time_steps
-        JuMP.fix(ug[g, t], 1.0)
+    # Eq (8) Must-run -- added as a constraint for Xpress due to fix not working
+    if use_must_run
+        if JuMP.solver_name(jump_model) == "Xpress"
+            JuMP.@constraint(
+                jump_model,
+                [g in must_run_gen_names, t in time_steps],
+                ug[g, t] >= 1
+            )
+        else
+            for g in must_run_gen_names, t in time_steps
+                JuMP.fix(ug[g, t], 1.0; force = true)
+            end
+        end
     end
 
     # Eq (9) - (10), up and down time constraints
@@ -400,9 +442,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
                 δ_sg[g, startup, t] <= sum(wg[g, t - i] for i in time_range)
             )
         end
+
         # Initial start-up type, based on Tight and Compact eq (15) rather than pg_lib (7)
+        # Xpress version adds extra constraints because it's not enforcing the fix
         if (g_startup[si + 1] - time_down_t0[g]) < t && t < g_startup[si + 1]
-            JuMP.fix(δ_sg[g, startup, t], 0.0)
+            if JuMP.solver_name(jump_model) == "Xpress"
+                JuMP.@constraint(jump_model, δ_sg[g, startup, t] <= 0)
+            else
+                JuMP.fix(δ_sg[g, startup, t], 0.0; force = true)
+            end
         end
     end
 
@@ -413,58 +461,61 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         vg[g, t] == sum(δ_sg[g, s, t] for s in startup_categories)
     )
 
-    # Eq (17) Total reg up
-    reg⁺_constraints = JuMP.@constraint(
-        jump_model,
-        [t in time_steps],
-        sum(
-            reg⁺[g, t] for g in (
-                use_storage_reserves ? union(reg⁺_device_names, storage_names) :
-                reg⁺_device_names
-            )
-        ) >= required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
-    )
-    # Eq (18) Total reg down
-    reg⁻_constraints = JuMP.@constraint(
-        jump_model,
-        [t in time_steps],
-        sum(
-            reg⁻[g, t] for g in (
-                use_storage_reserves ? union(reg⁻_device_names, storage_names) :
-                reg⁻_device_names
-            )
-        ) >= required_reg⁻[t]
-    )
-    # Eq (19) Total spin
-    spin_constraints = JuMP.@constraint(
-        jump_model,
-        [t in time_steps],
-        sum(
-            spin[g, t] for g in (
-                use_storage_reserves ? union(spin_device_names, storage_names) :
-                spin_device_names
-            )
-        ) >= required_spin[t]
-    )
-
-    # Eq (20) Reg up response time
-    reg⁺_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in reg⁺_device_names, t in time_steps],
-        reg⁺[g, t] <= L_REG * ramp_up[g]
-    )
-    # Eq (21) Reg down response time
-    reg⁻_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in reg⁻_device_names, t in time_steps],
-        reg⁻[g, t] <= L_REG * ramp_dn[g]
-    )
-    # Eq (22) Spin response time
-    spin_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in spin_device_names, t in time_steps],
-        spin[g, t] <= L_SPIN * ramp_up[g]
-    )
+    if use_reg
+        # Eq (17) Total reg up
+        reg⁺_constraints = JuMP.@constraint(
+            jump_model,
+            [t in time_steps],
+            sum(
+                reg⁺[g, t] for g in (
+                    use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                    reg⁺_device_names
+                )
+            ) >= required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
+        )
+        # Eq (18) Total reg down
+        reg⁻_constraints = JuMP.@constraint(
+            jump_model,
+            [t in time_steps],
+            sum(
+                reg⁻[g, t] for g in (
+                    use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                    reg⁻_device_names
+                )
+            ) >= required_reg⁻[t] - (use_slack ? slack_reg⁻[t] : 0)
+        )
+        # Eq (20) Reg up response time
+        reg⁺_response_constraints = JuMP.@constraint(
+            jump_model,
+            [g in reg⁺_device_names, t in time_steps],
+            reg⁺[g, t] <= L_REG * ramp_up[g]
+        )
+        # Eq (21) Reg down response time
+        reg⁻_response_constraints = JuMP.@constraint(
+            jump_model,
+            [g in reg⁻_device_names, t in time_steps],
+            reg⁻[g, t] <= L_REG * ramp_dn[g]
+        )
+    end
+    if use_spin
+        # Eq (19) Total spin
+        spin_constraints = JuMP.@constraint(
+            jump_model,
+            [t in time_steps],
+            sum(
+                spin[g, t] for g in (
+                    use_storage_reserves ? union(spin_device_names, storage_names) :
+                    spin_device_names
+                )
+            ) >= required_spin[t] - (use_slack ? slack_spin[t] : 0)
+        )
+        # Eq (22) Spin response time
+        spin_response_constraints = JuMP.@constraint(
+            jump_model,
+            [g in spin_device_names, t in time_steps],
+            spin[g, t] <= L_SPIN * ramp_up[g]
+        )
+    end
 
     # Eq (23) Solar scenarios
     solar_constraints = JuMP.@constraint(
@@ -503,31 +554,31 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         pS[j, t] +
         pW[t] + total_supp⁺[j, t] - total_supp⁻[j, t] +
         total_hydro[t] +
+        slack_energy⁺[t] +
         (use_storage ? sum(pb_out[b, t] - pb_in[b, t] for b in storage_names) : 0) ==
-        total_load[t]
+        total_load[t] + slack_energy⁻[t]
     )
 
     # Eq (31) Max output 1 -- in 3 parts for 3 reserve groupings
     maxoutput1_constraint_spin = JuMP.@constraint(
         jump_model,
         [g in spin_device_names, j in scenarios, t in time_steps],
-        pg[g, t] + spin[g, t] + supp⁺[g, j, t] <=
+        pg[g, t] + (use_spin ? spin[g, t] : 0) + supp⁺[g, j, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
     )
-    maxoutput1_constraint_reg = JuMP.@constraint(
-        jump_model,
-        [g in reg⁺_device_names, t in time_steps],
-        pg[g, t] + reg⁺[g, t] <=
-        (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-        max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
-    )
+    if use_reg
+        maxoutput1_constraint_reg = JuMP.@constraint(
+            jump_model,
+            [g in reg⁺_device_names, t in time_steps],
+            pg[g, t] + reg⁺[g, t] <=
+            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
+            max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
+        )
+    end
     maxoutput1_constraint_none = JuMP.@constraint(
         jump_model,
-        [
-            g in setdiff(thermal_gen_names, union(reg⁺_device_names, spin_device_names)),
-            t in time_steps,
-        ],
+        [g in no_res⁺_device_names, t in time_steps],
         pg[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
@@ -539,33 +590,34 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         [g in spin_device_names, j in scenarios, t in time_steps],
         pg[g, t] - supp⁻[g, j, t] >= 0
     )
-    reservedn_constraint_reg = JuMP.@constraint(
-        jump_model,
-        [g in reg⁻_device_names, t in time_steps],
-        pg[g, t] - reg⁻[g, t] >= 0
-    )
+    if use_reg
+        reservedn_constraint_reg = JuMP.@constraint(
+            jump_model,
+            [g in reg⁻_device_names, t in time_steps],
+            pg[g, t] - reg⁻[g, t] >= 0
+        )
+    end
 
     # Eq (32) Max output 2 -- in 3 parts for 3 reserve groupings
     maxoutput2_constraint_spin = JuMP.@constraint(
         jump_model,
         [g in spin_device_names, j in scenarios, t in time_steps[1:(end - 1)]],
-        pg[g, t] + spin[g, t] + supp⁺[g, j, t] <=
+        pg[g, t] + (use_spin ? spin[g, t] : 0) + supp⁺[g, j, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
     )
-    maxoutput2_constraint_reg = JuMP.@constraint(
-        jump_model,
-        [g in reg⁺_device_names, t in time_steps[1:(end - 1)]],
-        pg[g, t] + reg⁺[g, t] <=
-        (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-        max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
-    )
+    if use_reg
+        maxoutput2_constraint_reg = JuMP.@constraint(
+            jump_model,
+            [g in reg⁺_device_names, t in time_steps[1:(end - 1)]],
+            pg[g, t] + reg⁺[g, t] <=
+            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
+            max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
+        )
+    end
     maxoutput2_constraint_none = JuMP.@constraint(
         jump_model,
-        [
-            g in setdiff(thermal_gen_names, union(reg⁺_device_names, spin_device_names)),
-            t in time_steps[1:(end - 1)],
-        ],
+        [g in no_res⁺_device_names, t in time_steps[1:(end - 1)]],
         pg[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
@@ -591,42 +643,43 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         if t == 1  # pg_lib (8)
             rampup_constraint_spin[g, j, 1] = JuMP.@constraint(
                 jump_model,
-                pg[g, 1] + spin[g, 1] + supp⁺[g, j, 1] -
+                pg[g, 1] + (use_spin ? spin[g, 1] : 0) + supp⁺[g, j, 1] -
                 ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
             )
         else
             rampup_constraint_spin[g, j, t] = JuMP.@constraint(
                 jump_model,
-                pg[g, t] + spin[g, t] + supp⁺[g, j, t] - pg[g, t - 1] <= ramp_up[g]
+                pg[g, t] + (use_spin ? spin[g, t] : 0) + supp⁺[g, j, t] - pg[g, t - 1] <= ramp_up[g]
             )
         end
     end
-    rampup_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-        undef,
-        reg⁺_device_names,
-        time_steps,
-    )
-    for g in reg⁺_device_names, t in time_steps
-        if t == 1  # pg_lib (8)
-            rampup_constraint_reg[g, 1] = JuMP.@constraint(
-                jump_model,
-                pg[g, 1] + reg⁺[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
-            )
-        else
-            rampup_constraint_reg[g, t] = JuMP.@constraint(
-                jump_model,
-                pg[g, t] + reg⁺[g, t] - pg[g, t - 1] <= ramp_up[g]
-            )
+    if use_reg
+        rampup_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
+            undef,
+            reg⁺_device_names,
+            time_steps,
+        )
+        for g in reg⁺_device_names, t in time_steps
+            if t == 1  # pg_lib (8)
+                rampup_constraint_reg[g, 1] = JuMP.@constraint(
+                    jump_model,
+                    pg[g, 1] + reg⁺[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
+                    ramp_up[g]
+                )
+            else
+                rampup_constraint_reg[g, t] = JuMP.@constraint(
+                    jump_model,
+                    pg[g, t] + reg⁺[g, t] - pg[g, t - 1] <= ramp_up[g]
+                )
+            end
         end
     end
     rampup_constraint_none = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
         undef,
-        setdiff(thermal_gen_names, union(reg⁺_device_names, spin_device_names)),
+        no_res⁺_device_names,
         time_steps,
     )
-    for g in setdiff(thermal_gen_names, union(reg⁺_device_names, spin_device_names)),
-        t in time_steps
-
+    for g in no_res⁺_device_names, t in time_steps
         if t == 1  # pg_lib (8)
             rampup_constraint_none[g, 1] = JuMP.@constraint(
                 jump_model,
@@ -659,32 +712,34 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             )
         end
     end
-    rampdn_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-        undef,
-        reg⁻_device_names,
-        time_steps,
-    )
-    for g in reg⁻_device_names, t in time_steps
-        if t == 1  # pg_lib (9)
-            rampdn_constraint_reg[g, 1] = JuMP.@constraint(
-                jump_model,
-                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - reg⁻[g, t] <= ramp_dn[g]
-            )
-        else
-            rampdn_constraint_reg[g, t] = JuMP.@constraint(
-                jump_model,
-                pg[g, t - 1] - pg[g, t] - reg⁻[g, t] <= ramp_dn[g]
-            )
+    if use_reg
+        rampdn_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
+            undef,
+            reg⁻_device_names,
+            time_steps,
+        )
+        for g in reg⁻_device_names, t in time_steps
+            if t == 1  # pg_lib (9)
+                rampdn_constraint_reg[g, 1] = JuMP.@constraint(
+                    jump_model,
+                    ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - reg⁻[g, t] <=
+                    ramp_dn[g]
+                )
+            else
+                rampdn_constraint_reg[g, t] = JuMP.@constraint(
+                    jump_model,
+                    pg[g, t - 1] - pg[g, t] - reg⁻[g, t] <= ramp_dn[g]
+                )
+            end
         end
     end
+
     rampdn_constraint_none = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
         undef,
-        setdiff(thermal_gen_names, union(reg⁻_device_names, spin_device_names)),
+        no_res⁻_device_names,
         time_steps,
     )
-    for g in setdiff(thermal_gen_names, union(reg⁻_device_names, spin_device_names)),
-        t in time_steps
-
+    for g in no_res⁻_device_names, t in time_steps
         if t == 1  # pg_lib (9)
             rampdn_constraint_none[g, 1] = JuMP.@constraint(
                 jump_model,
@@ -710,13 +765,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         supp⁻[g, j, t] <= L_SUPP * ramp_dn[g]
     )
 
-    # Eq (37) Linked up-reserve response times
-    # Only needs to implement the spin and supp⁺ linkage, while reg⁺ group is mutually exclusive
-    linked_⁺_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in spin_device_names, j in scenarios, t in time_steps],
-        L_SUPP / L_SPIN * spin[g, t] + supp⁺[g, j, t] <= L_SUPP * ramp_up[g]
-    )
+    if use_spin
+        # Eq (37) Linked up-reserve response times
+        # Only needs to implement the spin and supp⁺ linkage, while reg⁺ group is mutually exclusive
+        linked_⁺_response_constraints = JuMP.@constraint(
+            jump_model,
+            [g in spin_device_names, j in scenarios, t in time_steps],
+            L_SUPP / L_SPIN * spin[g, t] + supp⁺[g, j, t] <= L_SUPP * ramp_up[g]
+        )
+    end
 
     # Eq (38) Linked down-reserve response times
     # Does not need to be implemented while reg⁻ and supp⁻ groups are mutually exclusive
@@ -762,25 +819,30 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
                 jump_model,
                 [b in storage_names, t in time_steps],
                 η[b].out * (eb[b, t] - eb_lim[b].min) >=
-                L_REG * reg⁺[b, t] + L_SPIN * spin[b, t]
+                (use_reg ? L_REG * reg⁺[b, t] : 0) + (use_spin ? L_SPIN * spin[b, t] : 0)
             )
-            storage_⁻_response_constraints = JuMP.@constraint(
-                jump_model,
-                [b in storage_names, t in time_steps],
-                (1 / η[b].in) * (eb_lim[b].max - eb[b, t]) >= L_REG * reg⁻[b, t]
-            )
+            if use_reg
+                storage_⁻_response_constraints = JuMP.@constraint(
+                    jump_model,
+                    [b in storage_names, t in time_steps],
+                    (1 / η[b].in) * (eb_lim[b].max - eb[b, t]) >= L_REG * reg⁻[b, t]
+                )
+            end
 
             # Power limits on reserves storage can provide
             storage_⁺_reserve_constraints = JuMP.@constraint(
                 jump_model,
                 [b in storage_names, t in time_steps],
-                reg⁺[b, t] + spin[b, t] <= pb_out_max[b] - pb_out[b, t] + pb_in[b, t]
+                (use_reg ? reg⁺[b, t] : 0) + (use_spin ? spin[b, t] : 0) <=
+                pb_out_max[b] - pb_out[b, t] + pb_in[b, t]
             )
-            storage_⁻_reserve_constraints = JuMP.@constraint(
-                jump_model,
-                [b in storage_names, t in time_steps],
-                reg⁻[b, t] <= pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
-            )
+            if use_reg
+                storage_⁻_reserve_constraints = JuMP.@constraint(
+                    jump_model,
+                    [b in storage_names, t in time_steps],
+                    reg⁻[b, t] <= pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
+                )
+            end
         end
     end
 
@@ -825,13 +887,12 @@ function get_area_total_time_series(problem, type; filter = nothing)
     end
 
     for l in iter
-        f = get_time_series_values(
+        total .+= get_time_series_values(
             Deterministic,
             l,
             "max_active_power";
             start_time = case_initial_time,
         )
-        total .+= f * PSY.get_max_active_power(l)
     end
 
     return total

@@ -1,8 +1,9 @@
 function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
     title = get(kwargs, :title, "Fuel")
-    save_fig = get(kwargs, :save, nothing)
+    save_dir = get(kwargs, :save_dir, nothing)
     storage = get(kwargs, :storage, true)
     scenario = get(kwargs, :scenario, 1)
+    case_initial_time = get(kwargs, :case_initial_time, nothing)
 
     p = PG._empty_plot()
     backend = Plots.backend()
@@ -19,8 +20,18 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
 
-    # TODO ALSO CHANGE SCENARIO LOAD-IN HERE
-    scenario_forecast = (ones(31, 36) .* 0.01)[scenario, :]
+    area = PSY.get_component(Area, system, "1")
+    scenario_forecast = permutedims(
+        PSY.get_time_series_values(
+            Scenarios,
+            area,
+            "solar_power";
+            start_time = case_initial_time,
+        ) ./ 100,
+    )[
+        scenario,
+        :,
+    ]
 
     gen = get_generation_data(
         problem,
@@ -31,10 +42,6 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         kwargs...,
     )
     cat = make_fuel_dictionary(system)
-    # Rename "other" to "battery"
-    # ! This does change the color from light to bright pink
-    cat["Battery"] = cat["Other"]
-    delete!(cat, "Other")
 
     fuel = my_categorize_data(gen.data, cat; kwargs...)
 
@@ -84,7 +91,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     if storage
         load_and_charging = load_agg .+ sum.(eachrow(gen.data[:pb_in]))
         DataFrames.rename!(load_and_charging, Symbol.(["Load + charging"]))
-        col = PG.match_fuel_colors(fuel_agg[!, ["Battery"]], backend)
+        col = PG.match_fuel_colors(fuel_agg[!, ["Storage"]], backend)
         p = plot_dataframe(
             p,
             load_and_charging,
@@ -99,10 +106,15 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         )
     end
 
-    if !isnothing(save_fig)
+    if !isnothing(save_dir)
         title = replace(title, " " => "_")
         format = get(kwargs, :format, "png")
-        PG.save_plot(p, joinpath(save_fig, "$title.$format"), backend; kwargs...)
+        PG.save_plot(
+            p,
+            joinpath(save_dir, "$title Scenario $scenario.$format"),
+            backend;
+            kwargs...,
+        )
     end
     return p
 end
