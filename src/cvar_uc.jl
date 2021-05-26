@@ -1,14 +1,16 @@
 struct CVaRUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
 function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};)
-    use_storage = get(problem.ext, "use_storage", true)
-    use_storage_reserves = get(problem.ext, "use_storage_reserves", true)
-    use_reg = get(problem.ext, "use_reg", true)
-    use_spin = get(problem.ext, "use_spin", true)
-    use_must_run = get(problem.ext, "use_must_run", true)
-    C_RR = get(problem.ext, "C_RR", 1000) # Penalty cost of recourse reserve
-    L_SUPP = get(problem.ext, "L_SUPP", 1 / 4) # 15 min, to start
-    α = get(problem.ext, "α", 0.20)
+    use_storage = problem.ext["use_storage"]
+    use_storage_reserves = problem.ext["use_storage_reserves"]
+    use_reg = problem.ext["use_reg"]
+    use_spin = problem.ext["use_spin"]
+    use_must_run = problem.ext["use_must_run"]
+    C_RR = problem.ext["C_RR"]
+    L_SUPP = problem.ext["L_SUPP"]
+    α = problem.ext["α"]
+    C_res_penalty = problem.ext["C_res_penalty"]
+    C_ener_penalty = problem.ext["C_ener_penalty"]
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
@@ -48,8 +50,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     Δt = 1
     L_REG = 1 / 12 # 5 min
     L_SPIN = 1 / 6 # 10 min
-    C_res_penalty = 5000
-    C_ener_penalty = 9000
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model

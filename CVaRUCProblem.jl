@@ -91,6 +91,8 @@ UC.ext["use_must_run"] = use_must_run
 UC.ext["C_RR"] = C_RR
 UC.ext["L_SUPP"] = L_SUPP
 UC.ext["α"] = α
+UC.ext["C_res_penalty"] = 5000
+UC.ext["C_ener_penalty"] = 100000
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
