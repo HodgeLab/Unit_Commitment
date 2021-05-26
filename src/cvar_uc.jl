@@ -6,6 +6,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     use_reg = get(problem.ext, "use_reg", true)
     use_spin = get(problem.ext, "use_spin", true)
     use_must_run = get(problem.ext, "use_must_run", true)
+    C_RR = get(problem.ext, "L_SUPP", 1000) # Penalty cost of recourse reserve
+    L_SUPP = get(problem.ext, "L_SUPP", 1 / 4) # 15 min, to start
+    α = get(problem.ext, "α", 0.20)
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
@@ -43,9 +46,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     Δt = 1
     L_REG = 1 / 12 # 5 min
     L_SPIN = 1 / 6 # 10 min
-    L_SUPP = 1 / 4 # 15 min, to start
-    C_RR = 1000 # Penalty cost of recourse reserve
-    α = 0.20 # Risk tolerance level
     C_penalty = 5000
 
     # -------------------------------------------------------------
