@@ -26,11 +26,12 @@ C_RR = isempty(ARGS) ? 1000 : parse(Float64, ARGS[6]) # Penalty cost of recourse
 L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[7]) # 15 min response time, to start
 α = isempty(ARGS) ? 0.20 : parse(Float64, ARGS[7]) # Risk tolerance level
 
-optional_title = (use_storage ? " stor" : "") *
-                (use_storage_reserves ? " storres" : "") *
-                (use_reg ? " reg" : "") *
-                (use_spin ? " spin" : "") *
-                (!use_must_run ? " no must run" : "")
+optional_title =
+    (use_storage ? " stor" : "") *
+    (use_storage_reserves ? " storres" : "") *
+    (use_reg ? " reg" : "") *
+    (use_spin ? " spin" : "") *
+    (!use_must_run ? " no must run" : "")
 
 output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
@@ -42,7 +43,10 @@ end
 ## Kate
 system_file_path = "data/"
 
-system_da = System(joinpath(system_file_path, "DA_sys_84_scenarios.json"); time_series_read_only = true)
+system_da = System(
+    joinpath(system_file_path, "DA_sys_84_scenarios.json");
+    time_series_read_only = true,
+)
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
 # system_ed = System("data/RT_sys.json"; time_series_read_only = true)
 
@@ -93,18 +97,20 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 status = solve!(UC)
 
 if status.value == 0
-    plot_fuel(UC;
+    plot_fuel(
+        UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
         scenario = 1,
-        save_dir = output_path
+        save_dir = output_path,
     )
 
-    plot_fuel(UC;
+    plot_fuel(
+        UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
         scenario = 80,
-        save_dir = output_path
+        save_dir = output_path,
     )
 
     write_to_CSV(UC, output_path)

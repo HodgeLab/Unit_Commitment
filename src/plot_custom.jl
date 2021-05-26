@@ -21,12 +21,17 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     )
 
     area = PSY.get_component(Area, system, "1")
-    scenario_forecast = permutedims(PSY.get_time_series_values(
-               Scenarios,
-               area,
-               "solar_power";
-               start_time = case_initial_time
-    ) ./ 100)[scenario, :]
+    scenario_forecast = permutedims(
+        PSY.get_time_series_values(
+            Scenarios,
+            area,
+            "solar_power";
+            start_time = case_initial_time,
+        ) ./ 100,
+    )[
+        scenario,
+        :,
+    ]
 
     gen = get_generation_data(
         problem,
@@ -104,7 +109,12 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
         format = get(kwargs, :format, "png")
-        PG.save_plot(p, joinpath(save_dir, "$title Scenario $scenario.$format"), backend; kwargs...)
+        PG.save_plot(
+            p,
+            joinpath(save_dir, "$title Scenario $scenario.$format"),
+            backend;
+            kwargs...,
+        )
     end
     return p
 end
