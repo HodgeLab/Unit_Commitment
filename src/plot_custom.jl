@@ -109,12 +109,13 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
         format = get(kwargs, :format, "png")
-        PG.save_plot(
-            p,
-            joinpath(save_dir, "$title Scenario $scenario.$format"),
-            backend;
-            kwargs...,
-        )
+        fname = joinpath(save_dir, "$title Scenario $scenario.$format")
+        # Overwrite existing plots
+        print(isfile(fname))
+        if isfile(fname)
+            rm(fname)
+        end
+        PG.save_plot(p, fname, backend)
     end
     return p
 end
