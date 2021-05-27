@@ -96,7 +96,7 @@ UC.ext["C_ener_penalty"] = 100000
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
-status = solve!(UC)
+(status, solvetime) = @timed solve!(UC)
 
 if status.value == 0
     plot_fuel(
@@ -115,5 +115,5 @@ if status.value == 0
         save_dir = output_path,
     )
 
-    write_to_CSV(UC, output_path)
+    write_to_CSV(UC, output_path; time=solvetime)
 end
