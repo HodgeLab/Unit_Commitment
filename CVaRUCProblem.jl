@@ -29,12 +29,13 @@ L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time,
 α = isempty(ARGS) ? 0.20 : parse(Float64, ARGS[10]) # Risk tolerance level
 
 optional_title =
-    (use_storage ? " stor" : "") *
-    (use_storage_reserves ? " storres" : "") *
-    (use_reg ? " reg" : "") *
-    (use_spin ? " spin" : "") *
-    (!use_must_run ? " no must run" : "") *
-    (!use_curtailment ? " no curt" : "")
+    "C_RR " * string(C_RR)
+    # (use_storage ? " stor" : "") *
+    # (use_storage_reserves ? " storres" : "") *
+    # (use_reg ? " reg" : "") *
+    # (use_spin ? " spin" : "") *
+    # (!use_must_run ? " no must run" : "") *
+    # (!use_curtailment ? " no curt" : "")
 
 output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
@@ -47,7 +48,7 @@ end
 system_file_path = "data/"
 
 system_da = System(
-    joinpath(system_file_path, "DA_sys_84_scenarios.json");
+    joinpath(system_file_path, "DA_sys_31_scenarios.json");
     time_series_read_only = true,
 )
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
@@ -108,8 +109,8 @@ if status.value == 0
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
         curtailment = use_curtailment,
-        scenario = 1,
-        save_dir = nothing,
+        scenario = 24,
+        save_dir = output_path,
         time_steps = 1:24
     )
 

@@ -95,8 +95,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         g => get_variable(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
     )
     # Battery parameters
+    # INCLUDE HACKS TO INCREASE CAPACITY WHILE JOSE ADJUSTS THINGS
+    fake_get_SOC = function(b)
+        min = get_state_of_charge_limits(b)[:min]*10
+        max = get_state_of_charge_limits(b)[:max]*10
+        return (min = min, max = max)
+    end
     eb_lim = Dict(
-        b => get_state_of_charge_limits(get_component(GenericBattery, system, b)) for
+        # b => get_state_of_charge_limits(get_component(GenericBattery, system, b)) for
+        b => fake_get_SOC(get_component(GenericBattery, system, b)) for
         b in storage_names
     )
     eb_t0 = Dict(
@@ -109,12 +116,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
     pb_in_max = Dict(
         b =>
-            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max]
+            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max]*10
         for b in storage_names
     )
     pb_out_max = Dict(
         b =>
-            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]
+            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]*10
         for b in storage_names
     )
     # initial conditions
@@ -261,6 +268,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         JuMP.@variable(jump_model, total_supp⁺[j in scenarios, t in time_steps] >= 0)
     total_supp⁻ =
         JuMP.@variable(jump_model, total_supp⁻[j in scenarios, t in time_steps] >= 0)
+    curtail =
+        JuMP.@variable(jump_model, curtail[j in scenarios, t in time_steps] >= 0)
     z = JuMP.@variable(jump_model, z[j in scenarios] >= 0) # Eq (25)
     β = JuMP.@variable(jump_model, β)
     λ = JuMP.@variable(
@@ -528,7 +537,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         solar_constraints = JuMP.@constraint(
             jump_model,
             [j in scenarios, t in time_steps],
-            pS[j, t] <= area_solar_forecast_scenarios[j, t]
+            pS[j, t] + curtail[j, t] == area_solar_forecast_scenarios[j, t]
         )
     end
 
@@ -537,7 +546,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     auxiliary_constraint = JuMP.@constraint(
         jump_model,
         [j in scenarios],
-        z[j] >= sum(total_supp⁺[j, t] + total_supp⁻[j, t] for t in time_steps) - β
+        z[j] >= sum(total_supp⁺[j, t] + total_supp⁻[j, t]  + curtail[j, t] for t in time_steps) - β
     )
 
     # Eq (27) Total supplemental up defintion
@@ -612,7 +621,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         [g in spin_device_names, j in scenarios, t in time_steps[1:(end - 1)]],
         pg[g, t] + (use_spin ? spin[g, t] : 0) + supp⁺[g, j, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-        max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
+        max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
+        # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
     )
     if use_reg
         maxoutput2_constraint_reg = JuMP.@constraint(
@@ -620,7 +630,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             [g in reg⁺_device_names, t in time_steps[1:(end - 1)]],
             pg[g, t] + reg⁺[g, t] <=
             (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
+            max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
+            # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
         )
     end
     maxoutput2_constraint_none = JuMP.@constraint(
@@ -628,7 +639,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         [g in no_res⁺_device_names, t in time_steps[1:(end - 1)]],
         pg[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-        max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
+        max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
+        # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
     )
     # Initial condition ignores t0 reserves, is same for all reserve groups. pg_lib (10)
     # Leaving separate because not indexed over j
@@ -637,7 +649,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         [g in thermal_gen_names],
         ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
         (pg_lim[g].max - pg_lim[g].min) * ug_t0[g] -
-        max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, 1]
+        max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, 1]
+        # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, 1]
     )
 
     # Eq (33) Ramp up -- in 3 parts for 3 reserve groupings
