@@ -1,14 +1,17 @@
 struct CVaRUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
 function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC};)
-    use_storage = get(problem.ext, "use_storage", true)
-    use_storage_reserves = get(problem.ext, "use_storage_reserves", true)
-    use_reg = get(problem.ext, "use_reg", true)
-    use_spin = get(problem.ext, "use_spin", true)
-    use_must_run = get(problem.ext, "use_must_run", true)
-    C_RR = get(problem.ext, "L_SUPP", 1000) # Penalty cost of recourse reserve
-    L_SUPP = get(problem.ext, "L_SUPP", 1 / 4) # 15 min, to start
-    α = get(problem.ext, "α", 0.20)
+    use_storage = problem.ext["use_storage"]
+    use_storage_reserves = problem.ext["use_storage_reserves"]
+    use_reg = problem.ext["use_reg"]
+    use_spin = problem.ext["use_spin"]
+    use_must_run = problem.ext["use_must_run"]
+    use_curtailment = problem.ext["use_curtailment"]
+    C_RR = problem.ext["C_RR"]
+    L_SUPP = problem.ext["L_SUPP"]
+    α = problem.ext["α"]
+    C_res_penalty = problem.ext["C_res_penalty"]
+    C_ener_penalty = problem.ext["C_ener_penalty"]
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
@@ -48,8 +51,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     Δt = 1
     L_REG = 1 / 12 # 5 min
     L_SPIN = 1 / 6 # 10 min
-    C_res_penalty = 5000
-    C_ener_penalty = 9000
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
@@ -213,8 +214,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         binary = true
     )
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, t in time_steps] >= 0) # power ABOVE MINIMUM
-    pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
-    pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
+    if use_curtailment # Define solar as either variable or fixed data
+        pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
+        pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
+    else
+        pS = area_solar_forecast_scenarios
+        pW = total_wind
+    end
     if use_reg
         reg⁺ = JuMP.@variable(
             jump_model,
@@ -291,8 +297,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     # -------------------------------------------------------------
 
     # Eq (5) Wind constraint
-    wind_constraint =
-        JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t])
+    if use_curtailment
+        wind_constraint =
+            JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t])
+    end
 
     # Eq (6) PWL variable cost constraint
     # PWL Cost function auxiliary variables
@@ -317,6 +325,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             i in 1:length(variable_cost[g])
         )
     )
+    optimization_container.expressions[:Cg] = Cg
 
     obj_function = JuMP.@objective(
         jump_model,
@@ -333,9 +342,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             C_res_penalty *
             sum(slack_reg⁺[t] + slack_reg⁻[t] + slack_spin[t] for t in time_steps) +
             C_ener_penalty * sum(slack_energy⁺[t] + slack_energy⁻[t] for t in time_steps) : 0
-        ) + (
-            use_storage ?
-            sum(pb_in[b, t] + pb_out[b, t] for b in storage_names, t in time_steps) : 0
         )
     )
 
@@ -518,11 +524,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     end
 
     # Eq (23) Solar scenarios
-    solar_constraints = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        pS[j, t] <= area_solar_forecast_scenarios[j, t]
-    )
+    if use_curtailment
+        solar_constraints = JuMP.@constraint(
+            jump_model,
+            [j in scenarios, t in time_steps],
+            pS[j, t] <= area_solar_forecast_scenarios[j, t]
+        )
+    end
 
     # Eq (25) is included in z variable definition
     # Eq (26) Auxiliary variable definition
@@ -896,4 +904,117 @@ function get_area_total_time_series(problem, type; filter = nothing)
     end
 
     return total
+end
+
+function PSI.write_to_CSV(
+    problem::PSI.OperationsProblem{CVaRUnitCommitmentCC},
+    output_path::String;
+    time = nothing
+)
+    optimization_container = PSI.get_optimization_container(problem)
+    jump_model = PSI.get_jump_model(optimization_container)
+    exclusions = [:λ, :β] # PWL chunks, expensive to export and useless
+    for (k, v) in jump_model.obj_dict
+        if !(k in exclusions)
+            df = PSI.axis_array_to_dataframe(v, [k])
+            file_name = joinpath(output_path, string(k) * ".csv")
+            CSV.write(file_name, df)
+        end
+    end
+
+    _write_summary_stats(problem, output_path, time)
+end
+
+function _write_summary_stats(
+    problem::PSI.OperationsProblem{CVaRUnitCommitmentCC},
+    output_path::String,
+    solvetime::Union{Nothing, Float64}
+)
+    optimization_container = PSI.get_optimization_container(problem)
+    system = PSI.get_system(problem)
+    time_steps = PSI.model_time_steps(optimization_container)
+    use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
+    use_storage = problem.ext["use_storage"]
+    use_reg = problem.ext["use_reg"]
+    use_spin = problem.ext["use_spin"]
+    C_RR = problem.ext["C_RR"]
+    α = problem.ext["α"]
+    C_res_penalty = problem.ext["C_res_penalty"]
+    C_ener_penalty = problem.ext["C_ener_penalty"]
+
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+    no_load_cost = Dict(
+        g => get_no_load(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
+    )
+    shutdown_cost = Dict(
+        g => get_shut_down(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
+    )
+    startup_cost = Dict(
+        g => get_start_up(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
+    )
+
+    obj_dict = PSI.get_jump_model(optimization_container).obj_dict
+    ug = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])
+    wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])
+    z = PSI.axis_array_to_dataframe(obj_dict[:z], [:z])
+    δ_sg = obj_dict[:δ_sg]
+    Cg = PSI.axis_array_to_dataframe(JuMP.value.(optimization_container.expressions[:Cg]))
+
+    output = Dict(
+        "Solve time (s)" => solvetime,
+        "L_SUPP" => problem.ext["L_SUPP"],
+        "C_RR" => C_RR,
+        "C_res_penalty" => C_res_penalty,
+        "C_ener_penalty" => C_ener_penalty,
+        "alpha" => α,
+        "Hot start cost" => JuMP.value(sum(startup_cost[g][:hot] * δ_sg[g, :hot, t] for g in thermal_gen_names, t in time_steps)),
+        "Warm start cost" => JuMP.value(sum(startup_cost[g][:warm] * δ_sg[g, :warm, t] for g in thermal_gen_names, t in time_steps)),
+        "Cold start cost" => JuMP.value(sum(startup_cost[g][:cold] * δ_sg[g, :cold, t] for g in thermal_gen_names, t in time_steps)),
+        "No-load cost" => sum(sum(ug[!, n] .* no_load_cost[n]) for n in names(ug)),
+        "Variable cost" => sum(sum(eachcol(Cg))),
+        "Shut-down cost" => sum(sum(wg[!, n] .* shutdown_cost[n]) for n in names(wg)),
+        "CVaR cost" =>
+        C_RR * (PSI._jump_value(obj_dict[:β]) + 1 / (nrow(z) * (1 - α)) * sum(z[!, :z]))
+    )
+    output["Start-up cost"] =
+        output["Hot start cost"] +
+        output["Warm start cost"] +
+        output["Cold start cost"]
+    output["Total cost"] =
+        output["No-load cost"] +
+        output["Variable cost"] +
+        output["Start-up cost"] +
+        output["Shut-down cost"] +
+        output["CVaR cost"]
+
+    if use_slack
+        if use_reg
+            slack_reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])
+            slack_reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])
+        end
+        if use_spin
+            slack_spin = PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])
+        end
+        slack_energy⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁺], [:slack_energy⁺])
+        slack_energy⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])
+    end
+
+    output["Penalty cost unserved reg up"] = (use_slack && use_reg) ? C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺]) : nothing
+    output["Penalty cost unserved reg down"] = (use_slack && use_reg) ? C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻]) : nothing
+    output["Penalty cost unserved spin"] = (use_slack && use_spin) ? C_res_penalty * sum(slack_spin[!, :slack_spin]) : nothing
+    output["Penalty cost unserved load"] = use_slack ? C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺]) : nothing
+    output["Penalty cost overgeneration"] = use_slack ? C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻]) : nothing
+
+    if use_storage
+        pb_in = PSI.axis_array_to_dataframe(obj_dict[:pb_in], [:pb_in])
+        pb_out = PSI.axis_array_to_dataframe(obj_dict[:pb_out], [:pb_out])
+    end
+
+    output["Total cost with penalties"] = output["Total cost"] +
+        ((use_slack && use_reg) ? output["Penalty cost unserved reg up"] + output["Penalty cost unserved reg down"] : 0) +
+        ((use_slack && use_spin) ? output["Penalty cost unserved spin"] : 0) +
+        (use_slack ? output["Penalty cost unserved load"] : 0) +
+        (use_slack ? output["Penalty cost overgeneration"] : 0)
+
+    CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
 end
