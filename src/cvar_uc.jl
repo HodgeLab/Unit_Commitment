@@ -342,9 +342,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
             C_res_penalty *
             sum(slack_reg⁺[t] + slack_reg⁻[t] + slack_spin[t] for t in time_steps) +
             C_ener_penalty * sum(slack_energy⁺[t] + slack_energy⁻[t] for t in time_steps) : 0
-        ) + (
-            use_storage ?
-            sum(pb_in[b, t] + pb_out[b, t] for b in storage_names, t in time_steps) : 0
         )
     )
 
@@ -942,6 +939,8 @@ function _write_summary_stats(
     use_spin = problem.ext["use_spin"]
     C_RR = problem.ext["C_RR"]
     α = problem.ext["α"]
+    C_res_penalty = problem.ext["C_res_penalty"]
+    C_ener_penalty = problem.ext["C_ener_penalty"]
 
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
     no_load_cost = Dict(
@@ -963,15 +962,19 @@ function _write_summary_stats(
 
     output = Dict(
         "Solve time (s)" => solvetime,
-        "No-load cost" => sum(sum(ug[!, n] .* no_load_cost[n]) for n in names(ug)),
+        "L_SUPP" => problem.ext["L_SUPP"],
+        "C_RR" => C_RR,
+        "C_res_penalty" => C_res_penalty,
+        "C_ener_penalty" => C_ener_penalty,
+        "alpha" => α,
         "Hot start cost" => JuMP.value(sum(startup_cost[g][:hot] * δ_sg[g, :hot, t] for g in thermal_gen_names, t in time_steps)),
         "Warm start cost" => JuMP.value(sum(startup_cost[g][:warm] * δ_sg[g, :warm, t] for g in thermal_gen_names, t in time_steps)),
         "Cold start cost" => JuMP.value(sum(startup_cost[g][:cold] * δ_sg[g, :cold, t] for g in thermal_gen_names, t in time_steps)),
-        "Shut-down cost" => sum(sum(wg[!, n] .* shutdown_cost[n]) for n in names(wg)),
+        "No-load cost" => sum(sum(ug[!, n] .* no_load_cost[n]) for n in names(ug)),
         "Variable cost" => sum(sum(eachcol(Cg))),
+        "Shut-down cost" => sum(sum(wg[!, n] .* shutdown_cost[n]) for n in names(wg)),
         "CVaR cost" =>
-        C_RR * (PSI._jump_value(obj_dict[:β]) + 1 / (nrow(z) * (1 - α)) * sum(z[!, :z])),
-        "L_SUPP" => problem.ext["L_SUPP"]
+        C_RR * (PSI._jump_value(obj_dict[:β]) + 1 / (nrow(z) * (1 - α)) * sum(z[!, :z]))
     )
     output["Start-up cost"] =
         output["Hot start cost"] +
@@ -983,39 +986,35 @@ function _write_summary_stats(
         output["Start-up cost"] +
         output["Shut-down cost"] +
         output["CVaR cost"]
-    output["Total cost with penalties"] = output["Total cost"]
 
     if use_slack
-        C_res_penalty = problem.ext["C_res_penalty"]
-        C_ener_penalty = problem.ext["C_ener_penalty"]
-
         if use_reg
             slack_reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])
             slack_reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])
-            output["Penalty cost unserved reg up"] = C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺])
-            output["Penalty cost unserved reg down"] = C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻])
         end
         if use_spin
             slack_spin = PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])
-            output["Penalty cost unserved spin"] = C_res_penalty * sum(slack_spin[!, :slack_spin])
         end
         slack_energy⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁺], [:slack_energy⁺])
         slack_energy⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])
-        output["Penalty cost unserved load"] = C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺])
-        output["Penalty cost overgeneration"] = C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻])
-
-        output["Total cost with penalties"] = output["Total cost with penalties"] +
-            (use_reg ? output["Penalty cost unserved reg up"] + output["Penalty cost unserved reg down"] : 0) +
-            (use_spin ? output["Penalty cost unserved spin"] : 0) +
-            output["Penalty cost unserved load"] +
-            output["Penalty cost overgeneration"]
     end
+
+    output["Penalty cost unserved reg up"] = (use_slack && use_reg) ? C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺]) : nothing
+    output["Penalty cost unserved reg down"] = (use_slack && use_reg) ? C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻]) : nothing
+    output["Penalty cost unserved spin"] = (use_slack && use_spin) ? C_res_penalty * sum(slack_spin[!, :slack_spin]) : nothing
+    output["Penalty cost unserved load"] = use_slack ? C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺]) : nothing
+    output["Penalty cost overgeneration"] = use_slack ? C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻]) : nothing
+
     if use_storage
         pb_in = PSI.axis_array_to_dataframe(obj_dict[:pb_in], [:pb_in])
         pb_out = PSI.axis_array_to_dataframe(obj_dict[:pb_out], [:pb_out])
-        output["Modeled cost of storage"] = sum(sum(eachcol(pb_in .+ pb_out)))
-        output["Total cost with penalties"] = output["Total cost with penalties"] +
-            output["Modeled cost of storage"]
     end
+
+    output["Total cost with penalties"] = output["Total cost"] +
+        ((use_slack && use_reg) ? output["Penalty cost unserved reg up"] + output["Penalty cost unserved reg down"] : 0) +
+        ((use_slack && use_spin) ? output["Penalty cost unserved spin"] : 0) +
+        (use_slack ? output["Penalty cost unserved load"] : 0) +
+        (use_slack ? output["Penalty cost overgeneration"] : 0)
+
     CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
 end
