@@ -108,7 +108,8 @@ if status.value == 0
         storage = use_storage,
         curtailment = use_curtailment,
         scenario = 1,
-        save_dir = output_path,
+        save_dir = nothing,
+        time_steps = 1:24
     )
 
     plot_fuel(

@@ -4,6 +4,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     storage = get(kwargs, :storage, true)
     scenario = get(kwargs, :scenario, 1)
     case_initial_time = get(kwargs, :case_initial_time, nothing)
+    time_steps = get(kwargs, :time_steps, nothing)
 
     p = PG._empty_plot()
     backend = Plots.backend()
@@ -11,14 +12,17 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
+    if isnothing(time_steps)
+        time_steps = PSI.model_time_steps(optimization_container)
+    end
 
-    total_load = get_area_total_time_series(problem, PowerLoad)
-    total_hydro = get_area_total_time_series(problem, HydroGen)
+    total_load = get_area_total_time_series(problem, PowerLoad)[time_steps]
+    total_hydro = get_area_total_time_series(problem, HydroGen)[time_steps]
     total_wind = get_area_total_time_series(
         problem,
         RenewableGen;
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
-    )
+    )[time_steps]
 
     area = PSY.get_component(Area, system, "1")
     scenario_forecast = permutedims(
@@ -30,7 +34,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         ) ./ 100,
     )[
         scenario,
-        :,
+        time_steps,
     ]
 
     gen = get_generation_data(
@@ -38,7 +42,8 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         total_wind,
         total_hydro,
         scenario,
-        scenario_forecast;
+        scenario_forecast,
+        time_steps;
         kwargs...,
     )
     cat = make_fuel_dictionary(system)
@@ -122,7 +127,8 @@ function PG.get_generation_data(
     total_wind,
     total_hydro,
     scenario,
-    scenario_forecast;
+    scenario_forecast,
+    time_steps;
     kwargs...,
 )
     curtailment = get(kwargs, :curtailment, true)
@@ -141,9 +147,9 @@ function PG.get_generation_data(
 
     variables = Dict{Symbol, DataFrames.DataFrame}()
     for v in var_names
-        variables[v] = PSI.axis_array_to_dataframe(jump_model.obj_dict[v], [v])
+        variables[v] = PSI.axis_array_to_dataframe(jump_model.obj_dict[v], [v])[time_steps, :]
         if v == :pg
-            Pg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])
+            Pg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[time_steps, :]
             for n in names(Pg)
                 Pg[!, n] .*=
                     get_active_power_limits(get_component(ThermalMultiStart, system, n)).min
@@ -154,9 +160,9 @@ function PG.get_generation_data(
     # Select single solar scenario
     if curtailment
         variables[:pS] =
-        PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[:, [scenario]]
+        PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[time_steps, [scenario]]
         variables[:pW] =
-            PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])
+            PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])[time_steps, :]
     else
         variables[:pW] = DataFrames.DataFrame(Dict(:pW => total_wind))
         variables[:pS] = DataFrames.DataFrame(Dict(:pW => scenario_forecast))
@@ -165,7 +171,7 @@ function PG.get_generation_data(
 
     # Supp is 3D transformed to 2D; select single scenario out
     x = PSI.axis_array_to_dataframe(jump_model.obj_dict[:supp⁺], [:supp⁺])
-    variables[:supp⁺] = x[x[!, :S1] .== scenario, names(x) .!= "S1"]
+    variables[:supp⁺] = (x[x[!, :S1] .== scenario, names(x) .!= "S1"])[time_steps, :]
 
     variables[:curt] = DataFrames.DataFrame(
         :curt =>
@@ -178,7 +184,7 @@ function PG.get_generation_data(
         variables[v] .*= get_base_power(system) ./ 1000
     end
 
-    timestamps = get_timestamps(problem)
+    timestamps = get_timestamps(problem)[time_steps]
     return PG.PGData(variables, timestamps)
 end
 
