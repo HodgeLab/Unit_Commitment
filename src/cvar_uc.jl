@@ -6,6 +6,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]
+    use_curtailment = problem.ext["use_curtailment"]
     C_RR = problem.ext["C_RR"]
     L_SUPP = problem.ext["L_SUPP"]
     α = problem.ext["α"]
@@ -213,8 +214,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
         binary = true
     )
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, t in time_steps] >= 0) # power ABOVE MINIMUM
-    pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
-    pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
+    if use_curtailment # Define solar as either variable or fixed data
+        pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
+        pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
+    else
+        pS = area_solar_forecast_scenarios
+        pW = total_wind
+    end
     if use_reg
         reg⁺ = JuMP.@variable(
             jump_model,
@@ -291,8 +297,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     # -------------------------------------------------------------
 
     # Eq (5) Wind constraint
-    wind_constraint =
-        JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t])
+    if use_curtailment
+        wind_constraint =
+            JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t])
+    end
 
     # Eq (6) PWL variable cost constraint
     # PWL Cost function auxiliary variables
@@ -519,11 +527,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     end
 
     # Eq (23) Solar scenarios
-    solar_constraints = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        pS[j, t] <= area_solar_forecast_scenarios[j, t]
-    )
+    if use_curtailment
+        solar_constraints = JuMP.@constraint(
+            jump_model,
+            [j in scenarios, t in time_steps],
+            pS[j, t] <= area_solar_forecast_scenarios[j, t]
+        )
+    end
 
     # Eq (25) is included in z variable definition
     # Eq (26) Auxiliary variable definition
