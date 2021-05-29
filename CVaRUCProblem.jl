@@ -1,4 +1,4 @@
-# To run: julia --project CVaRUCProblem.jl true true true true true true 1000 0.25 0.20
+# To run: julia --project CVaRUCProblem.jl true true true true true true true 1000 0.25 0.20
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -23,9 +23,10 @@ use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_curtailment = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-C_RR = isempty(ARGS) ? 4000 : parse(Float64, ARGS[7]) # Penalty cost of recourse reserve
-L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[8]) # 15 min response time, to start
-α = isempty(ARGS) ? 0.20 : parse(Float64, ARGS[9]) # Risk tolerance level
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
+C_RR = isempty(ARGS) ? 4000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
+L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
+α = isempty(ARGS) ? 0.20 : parse(Float64, ARGS[10]) # Risk tolerance level
 
 optional_title =
     (use_storage ? " stor" : "") *
@@ -54,7 +55,7 @@ system_da = System(
 
 # Jose's tune-ups for the HA UC
 for system in [system_da] # [system_da, system_ha, system_ed]
-    appply_manual_data_updates!(system)
+    appply_manual_data_updates!(system, use_nuclear)
 end
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
