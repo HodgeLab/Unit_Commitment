@@ -104,24 +104,35 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 (status, solvetime) = @timed solve!(UC)
 
 if status.value == 0
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_curtailment,
-        scenario = 24,
-        save_dir = output_path,
-        time_steps = 1:24
-    )
-
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_curtailment,
-        scenario = 80,
-        save_dir = output_path,
-    )
-
     write_to_CSV(UC, output_path; time=solvetime)
+
+    # Scenario 29 rises early in the day on April 20th
+    plot_fuel(
+        UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        curtailment = use_curtailment,
+        scenario = 29,
+        save_dir = output_path
+    )
+
+    # Scenario 14 is the low outlier on April 20th
+    plot_fuel(
+        UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        curtailment = use_curtailment,
+        scenario = 14,
+        save_dir = output_path,
+    )
+
+    # Scenario 28 has high spikes late in the day on April 20th
+    plot_fuel(
+        UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        curtailment = use_curtailment,
+        scenario = 28,
+        save_dir = output_path,
+    )
 end
