@@ -1,4 +1,6 @@
-function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwargs...)
+function PG.plot_fuel(
+    problem::Union{PSI.OperationsProblem{CVaRPowerUnitCommitmentCC}, PSI.OperationsProblem{CVaRReserveUnitCommitmentCC}};
+    kwargs...)
     title = get(kwargs, :title, "Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
     storage = get(kwargs, :storage, true)
@@ -123,7 +125,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
 end
 
 function PG.get_generation_data(
-    problem::PSI.OperationsProblem{CVaRUnitCommitmentCC},
+    problem::Union{PSI.OperationsProblem{CVaRPowerUnitCommitmentCC}, PSI.OperationsProblem{CVaRReserveUnitCommitmentCC}},
     total_wind,
     total_hydro,
     scenario,

@@ -78,7 +78,7 @@ set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitm
 # set_device_model!(template_ed, ThermalMultiStart, ThermalRampLimited)
 
 UC = OperationsProblem(
-    CVaRUnitCommitmentCC,
+    CVaRPowerUnitCommitmentCC,
     template_dauc,
     system_da,
     optimizer = solver,
