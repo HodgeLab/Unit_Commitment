@@ -16,7 +16,7 @@ function PG.plot_fuel(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}; kwar
         time_steps = PSI.model_time_steps(optimization_container)
     end
 
-    total_load = get_area_total_time_series(problem, PowerLoad)[time_steps]
+    total_load = get_area_total_time_series(problem, PowerLoad)[time_steps].*1.15
     total_hydro = get_area_total_time_series(problem, HydroGen)[time_steps]
     total_wind = get_area_total_time_series(
         problem,

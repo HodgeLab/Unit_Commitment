@@ -97,8 +97,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     # Battery parameters
     # INCLUDE HACKS TO INCREASE CAPACITY WHILE JOSE ADJUSTS THINGS
     fake_get_SOC = function(b)
-        min = get_state_of_charge_limits(b)[:min]*10
-        max = get_state_of_charge_limits(b)[:max]*10
+        min = get_state_of_charge_limits(b)[:min]*15
+        max = get_state_of_charge_limits(b)[:max]*15
         return (min = min, max = max)
     end
     eb_lim = Dict(
@@ -116,12 +116,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     )
     pb_in_max = Dict(
         b =>
-            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max]*10
+            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max]*15
         for b in storage_names
     )
     pb_out_max = Dict(
         b =>
-            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]*10
+            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]*15
         for b in storage_names
     )
     # initial conditions
@@ -189,7 +189,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRUnitCommitmentCC}
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
-    total_load = get_area_total_time_series(problem, PowerLoad)
+    total_load = get_area_total_time_series(problem, PowerLoad).*1.15
     total_hydro = get_area_total_time_series(problem, HydroGen)
     total_wind = get_area_total_time_series(
         problem,
