@@ -16,7 +16,9 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-initial_time = "2018-04-20T00:00:00"
+# May 1st: under low tail in afternoon (Day 121)
+# June 20th: Low tail in morning (Day 171)
+initial_time = "2018-05-01T00:00:00"
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
@@ -26,16 +28,15 @@ use_curtailment = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 C_RR = isempty(ARGS) ? 4000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
 L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
-α = isempty(ARGS) ? 0.20 : parse(Float64, ARGS[10]) # Risk tolerance level
+α = isempty(ARGS) ? 0 : parse(Float64, ARGS[10]) # Risk tolerance level
 
 optional_title =
-    "C_RR " * string(C_RR)
-    # (use_storage ? " stor" : "") *
-    # (use_storage_reserves ? " storres" : "") *
-    # (use_reg ? " reg" : "") *
-    # (use_spin ? " spin" : "") *
-    # (!use_must_run ? " no must run" : "") *
-    # (!use_curtailment ? " no curt" : "")
+    (use_storage ? " stor" : "") *
+    (use_storage_reserves ? " storres" : "") *
+    (use_reg ? " reg" : "") *
+    (use_spin ? " spin" : "") *
+    (!use_must_run ? " no must run" : "") *
+    (!use_curtailment ? " no curt" : "")
 
 output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
@@ -106,33 +107,43 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 if status.value == 0
     write_to_CSV(UC, output_path; time=solvetime)
 
-    # Scenario 29 rises early in the day on April 20th
+    # Scenario 69 is low on the morning of June 20th
     plot_fuel(
         UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
         curtailment = use_curtailment,
-        scenario = 29,
+        scenario = 69,
         save_dir = output_path
     )
 
-    # Scenario 14 is the low outlier on April 20th
+    # Scenario 12 is high on the morning of June 20th
     plot_fuel(
         UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
         curtailment = use_curtailment,
-        scenario = 14,
+        scenario = 12,
+        save_dir = output_path
+    )
+
+    # Scenario 82 is the highest scenario on May 1st
+    plot_fuel(
+        UC;
+        case_initial_time = DateTime(initial_time),
+        storage = use_storage,
+        curtailment = use_curtailment,
+        scenario = 82,
         save_dir = output_path,
     )
 
-    # Scenario 28 has high spikes late in the day on April 20th
+    # 53 is one of the lowest scenarios in the afternoon on May 1st
     plot_fuel(
         UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
         curtailment = use_curtailment,
-        scenario = 28,
+        scenario = 53,
         save_dir = output_path,
     )
 end
