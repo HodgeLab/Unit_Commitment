@@ -14,6 +14,7 @@ const PG = PowerGraphics
 
 include("manual_data_updates.jl")
 include("cvar_power_uc.jl")
+include("cvar_reserve_uc.jl")
 include("multi_start_cc.jl")
 include("update_problem.jl")
 include("solve_problem.jl")
