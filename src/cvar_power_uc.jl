@@ -585,9 +585,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
         (total_supp⁺[j, t] + supp⁺_S[j, t]) -
         (total_supp⁻[j, t] + supp⁻_S[j, t]) +
         total_hydro[t] +
-        slack_energy⁺[t] +
+        (use_slack ? slack_energy⁺[t] : 0) +
         (use_storage ? sum(pb_out[b, t] - pb_in[b, t] for b in storage_names) : 0) ==
-        total_load[t] + slack_energy⁻[t]
+        total_load[t] + (use_slack ? slack_energy⁻[t] : 0)
     )
 
     # Eq (31) Max output 1 -- in 3 parts for 3 reserve groupings

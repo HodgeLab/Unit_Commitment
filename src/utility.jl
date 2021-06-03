@@ -123,22 +123,26 @@ function _write_summary_stats(
         slack_energy⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])
     end
 
-    output["Penalty cost unserved reg up"] = (use_slack && use_reg) ? C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺]) : nothing
-    output["Penalty cost unserved reg down"] = (use_slack && use_reg) ? C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻]) : nothing
-    output["Penalty cost unserved spin"] = (use_slack && use_spin) ? C_res_penalty * sum(slack_spin[!, :slack_spin]) : nothing
-    output["Penalty cost unserved load"] = use_slack ? C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺]) : nothing
-    output["Penalty cost overgeneration"] = use_slack ? C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻]) : nothing
+    if use_slack
+        if use_reg
+            output["Penalty cost unserved reg up"] = C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺])
+            output["Penalty cost unserved reg down"] = C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻])
+        end
+        if use_spin
+            output["Penalty cost unserved spin"] = C_res_penalty * sum(slack_spin[!, :slack_spin])
+        end
+        output["Penalty cost unserved load"] = C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺])
+        output["Penalty cost overgeneration"] = C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻])
 
-    if use_storage
-        pb_in = PSI.axis_array_to_dataframe(obj_dict[:pb_in], [:pb_in])
-        pb_out = PSI.axis_array_to_dataframe(obj_dict[:pb_out], [:pb_out])
+        output["Total cost with penalties"] = output["Total cost"] +
+        (use_reg ? output["Penalty cost unserved reg up"] + output["Penalty cost unserved reg down"] : 0) +
+        (use_spin ? output["Penalty cost unserved spin"] : 0) +
+        output["Penalty cost unserved load"] +
+        output["Penalty cost overgeneration"]
     end
 
-    output["Total cost with penalties"] = output["Total cost"] +
-        ((use_slack && use_reg) ? output["Penalty cost unserved reg up"] + output["Penalty cost unserved reg down"] : 0) +
-        ((use_slack && use_spin) ? output["Penalty cost unserved spin"] : 0) +
-        (use_slack ? output["Penalty cost unserved load"] : 0) +
-        (use_slack ? output["Penalty cost overgeneration"] : 0)
+
+
 
     CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
 end
