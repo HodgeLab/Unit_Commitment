@@ -6,7 +6,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]
-    use_curtailment = problem.ext["use_curtailment"]
+    use_wind_curtailment = problem.ext["use_wind_curtailment"]
     C_RR = problem.ext["C_RR"]
     L_SUPP = problem.ext["L_SUPP"]
     α = problem.ext["α"]
@@ -221,13 +221,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
         binary = true
     )
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, t in time_steps] >= 0) # power ABOVE MINIMUM
-    if use_curtailment # Define solar as either variable or fixed data
-        pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
+    if use_wind_curtailment # Define solar as either variable or fixed data
         pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
     else
-        pS = area_solar_forecast_scenarios
         pW = total_wind
     end
+    pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
     if use_reg
         reg⁺ = JuMP.@variable(
             jump_model,
@@ -264,8 +263,14 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
         jump_model,
         supp⁻[g in spin_device_names, j in scenarios, t in time_steps] >= 0
     )
-    curtail =
-        JuMP.@variable(jump_model, curtail[j in scenarios, t in time_steps] >= 0)
+    supp⁺_S = JuMP.@variable(
+        jump_model,
+        supp⁺_S[j in scenarios, t in time_steps] >= 0
+    )
+    supp⁻_S = JuMP.@variable(
+        jump_model,
+        supp⁻_S[j in scenarios, t in time_steps] >= 0
+    )
     z = JuMP.@variable(jump_model, z[j in scenarios] >= 0) # Eq (25)
     β = JuMP.@variable(jump_model, β)
     λ = JuMP.@variable(
@@ -302,7 +307,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
     # -------------------------------------------------------------
 
     # Eq (5) Wind constraint
-    if use_curtailment
+    if use_wind_curtailment
         wind_constraint =
             JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t])
     end
@@ -529,18 +534,26 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
     end
 
     # Eq (23) Solar scenarios
-    if use_curtailment
-        solar_constraints = JuMP.@constraint(
-            jump_model,
-            [j in scenarios, t in time_steps],
-            pS[j, t] + curtail[j, t] == area_solar_forecast_scenarios[j, t]
-        )
-    end
+    solar_constraints = JuMP.@constraint(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        pS[j, t] <= area_solar_forecast_scenarios[j, t]
+    )
+
+    solar_supp_up_constraints = JuMP.@constraint(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        supp⁺_S[j, t] <= area_solar_forecast_scenarios[j, t] - pS[j, t]
+    )
+
+    solar_supp_dn_constraints = JuMP.@constraint(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        supp⁻_S[j, t] <= pS[j, t]
+    )
 
     # Eq (25) is included in z variable definition
-
     # Eq (27) and (28) Supplemental reserve definitions as expressions instead of variables
-
     total_supp⁺ = JuMP.@expression(
         jump_model,
         [j in scenarios, t in time_steps],
@@ -568,7 +581,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
         [j in scenarios, t in time_steps],
         sum(pg[g, t] + pg_lim[g].min * ug[g, t] for g in thermal_gen_names) +
         pS[j, t] +
-        pW[t] + total_supp⁺[j, t] - total_supp⁻[j, t] +
+        pW[t] +
+        (total_supp⁺[j, t] + supp⁺_S[j, t]) -
+        (total_supp⁻[j, t] + supp⁻_S[j, t]) +
         total_hydro[t] +
         slack_energy⁺[t] +
         (use_storage ? sum(pb_out[b, t] - pb_in[b, t] for b in storage_names) : 0) ==

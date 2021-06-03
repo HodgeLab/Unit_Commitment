@@ -24,7 +24,7 @@ use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
-use_curtailment = isempty(ARGS) ? true : parse(Bool, ARGS[6])
+use_wind_curtailment = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 C_RR = isempty(ARGS) ? 4000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
 L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
@@ -36,7 +36,7 @@ optional_title =
     (use_reg ? " reg" : "") *
     (use_spin ? " spin" : "") *
     (!use_must_run ? " no must run" : "") *
-    (!use_curtailment ? " no curt" : "")
+    (!use_wind_curtailment ? " no curt" : "")
 
 output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
@@ -49,7 +49,7 @@ end
 system_file_path = "data/"
 
 system_da = System(
-    joinpath(system_file_path, "DA_sys_31_scenarios.json");
+    joinpath(system_file_path, "DA_sys_84_scenarios.json");
     time_series_read_only = true,
 )
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
@@ -93,7 +93,7 @@ UC.ext["use_storage_reserves"] = use_storage_reserves
 UC.ext["use_reg"] = use_reg
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
-UC.ext["use_curtailment"] = use_curtailment
+UC.ext["use_wind_curtailment"] = use_wind_curtailment
 UC.ext["C_RR"] = C_RR
 UC.ext["L_SUPP"] = L_SUPP
 UC.ext["α"] = α
@@ -112,7 +112,7 @@ if status.value == 0
         UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
-        curtailment = use_curtailment,
+        curtailment = use_wind_curtailment,
         scenario = 69,
         save_dir = output_path
     )
@@ -122,7 +122,7 @@ if status.value == 0
         UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
-        curtailment = use_curtailment,
+        curtailment = use_wind_curtailment,
         scenario = 12,
         save_dir = output_path
     )
@@ -132,7 +132,7 @@ if status.value == 0
         UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
-        curtailment = use_curtailment,
+        curtailment = use_wind_curtailment,
         scenario = 82,
         save_dir = output_path,
     )
@@ -142,7 +142,7 @@ if status.value == 0
         UC;
         case_initial_time = DateTime(initial_time),
         storage = use_storage,
-        curtailment = use_curtailment,
+        curtailment = use_wind_curtailment,
         scenario = 53,
         save_dir = output_path,
     )
