@@ -135,6 +135,7 @@ function PG.get_generation_data(
 )
     curtailment = get(kwargs, :curtailment, true)
     storage = get(kwargs, :storage, true)
+    use_slack = get(kwargs, :use_slack, true)
 
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
@@ -145,6 +146,9 @@ function PG.get_generation_data(
     push!(var_names, :pg)
     if storage
         push!(var_names, :pb_in, :pb_out)
+    end
+    if use_slack
+        push!(var_names, :slack_energy⁺)
     end
 
     variables = Dict{Symbol, DataFrames.DataFrame}()
@@ -226,6 +230,9 @@ function my_categorize_data(
     # Hack to match color, will be renamed
     category_dataframes["Imports/Exports"] = data[:supp⁺]
     category_dataframes["Curtailment"] = data[:curt]
+    if get(kwargs, :use_slack, true)
+        category_dataframes["Unserved Energy"] = data[:slack_energy⁺]
+    end
 
     return category_dataframes
 end

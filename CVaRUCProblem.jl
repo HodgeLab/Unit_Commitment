@@ -84,7 +84,7 @@ UC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = true,
-    balance_slack_variables = true,
+    balance_slack_variables = false,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
@@ -114,7 +114,8 @@ if status.value == 0
         storage = use_storage,
         curtailment = use_wind_curtailment,
         scenario = 69,
-        save_dir = output_path
+        save_dir = output_path,
+        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
     )
 
     # Scenario 12 is high on the morning of June 20th
@@ -124,7 +125,8 @@ if status.value == 0
         storage = use_storage,
         curtailment = use_wind_curtailment,
         scenario = 12,
-        save_dir = output_path
+        save_dir = output_path,
+        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
     )
 
     # Scenario 82 is the highest scenario on May 1st
@@ -135,6 +137,7 @@ if status.value == 0
         curtailment = use_wind_curtailment,
         scenario = 82,
         save_dir = output_path,
+        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
     )
 
     # 53 is one of the lowest scenarios in the afternoon on May 1st
@@ -145,5 +148,6 @@ if status.value == 0
         curtailment = use_wind_curtailment,
         scenario = 53,
         save_dir = output_path,
+        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
     )
 end
