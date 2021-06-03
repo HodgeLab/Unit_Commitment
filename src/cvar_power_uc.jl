@@ -264,10 +264,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
         jump_model,
         supp⁻[g in spin_device_names, j in scenarios, t in time_steps] >= 0
     )
-    total_supp⁺ =
-        JuMP.@variable(jump_model, total_supp⁺[j in scenarios, t in time_steps] >= 0)
-    total_supp⁻ =
-        JuMP.@variable(jump_model, total_supp⁻[j in scenarios, t in time_steps] >= 0)
     curtail =
         JuMP.@variable(jump_model, curtail[j in scenarios, t in time_steps] >= 0)
     z = JuMP.@variable(jump_model, z[j in scenarios] >= 0) # Eq (25)
@@ -542,24 +538,27 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
     end
 
     # Eq (25) is included in z variable definition
+
+    # Eq (27) and (28) Supplemental reserve definitions as expressions instead of variables
+
+    total_supp⁺ = JuMP.@expression(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        sum(supp⁺[g, j, t] for g in spin_device_names)
+    )
+    total_supp⁻ = JuMP.@expression(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        sum(supp⁻[g, j, t] for g in spin_device_names)
+    )
+    optimization_container.expressions[:total_supp⁺] = total_supp⁺
+    optimization_container.expressions[:total_supp⁻] = total_supp⁻
+
     # Eq (26) Auxiliary variable definition
     auxiliary_constraint = JuMP.@constraint(
         jump_model,
         [j in scenarios],
-        z[j] >= sum(total_supp⁺[j, t] + total_supp⁻[j, t]  + curtail[j, t] for t in time_steps) - β
-    )
-
-    # Eq (27) Total supplemental up defintion
-    supp⁺_constraint = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        sum(supp⁺[g, j, t] for g in spin_device_names) == total_supp⁺[j, t]
-    )
-    # Eq (28) Total supplemental down defintion
-    supp⁻_constraint = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        sum(supp⁻[g, j, t] for g in spin_device_names) == total_supp⁻[j, t]
+        z[j] >= sum(total_supp⁺[j, t] + total_supp⁻[j, t] for t in time_steps) - β
     )
     # Eq (29) is included in supp_ variable definitions
 
