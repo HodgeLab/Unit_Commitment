@@ -134,7 +134,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     # This assumes the supp⁻ set is the reg⁻ set
     no_res⁻_device_names = setdiff(
         thermal_gen_names,
-        reg⁻_device_names
+        (use_reg ? reg⁻_device_names : Vector{String}())
     )
 
     required_reg⁺ = get_time_series_values(
