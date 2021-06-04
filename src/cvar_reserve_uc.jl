@@ -769,13 +769,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     linked_⁺_response_constraints = JuMP.@constraint(
         jump_model,
         [g in reg⁺_device_names, j in scenarios, t in time_steps],
-        L_SUPP / L_REG * reg⁺[g, j, t] + supp⁺[g, j, t] <= L_SUPP * ramp_up[g]
+        L_SUPP / L_REG * reg⁺[g, t] + supp⁺[g, j, t] <= L_SUPP * ramp_up[g]
     )
 
     linked_⁻_response_constraints = JuMP.@constraint(
         jump_model,
         [g in reg⁻_device_names, j in scenarios, t in time_steps],
-        L_SUPP / L_REG * reg⁻[g, j, t] + supp⁻[g, j, t] <= L_SUPP * ramp_dn[g]
+        L_SUPP / L_REG * reg⁻[g, t] + supp⁻[g, j, t] <= L_SUPP * ramp_dn[g]
     )
 
     # Additional storage equations
