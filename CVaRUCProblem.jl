@@ -1,4 +1,4 @@
-# To run: julia --project CVaRUCProblem.jl true true true true true true true 1000 0.25 0.20
+# To run: julia --project CVaRUCProblem.jl true true true true true true true 1000 0.25 0.80 Power
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -18,7 +18,7 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 
 # May 1st: under low tail in afternoon (Day 121)
 # June 20th: Low tail in morning (Day 171)
-initial_time = "2018-05-01T00:00:00"
+initial_time = "2018-06-20T00:00:00"
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
@@ -29,23 +29,26 @@ use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 C_RR = isempty(ARGS) ? 4000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
 L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
 α = isempty(ARGS) ? 0 : parse(Float64, ARGS[10]) # Risk tolerance level
+formulation = isempty(ARGS) ? "Power" : ARGS[11]
 
-custom_problem = CVaRPowerUnitCommitmentCC
-if custom_problem == CVaRPowerUnitCommitmentCC
-    problem_dir = "CVaRPower/"
-elseif custom_problem == CVaRReserveUnitCommitmentCC
-    problem_dir = "CVaRReserve/"
+if formulation == "Power"
+    custom_problem = CVaRPowerUnitCommitmentCC
+elseif formulation == "Reserve"
+    custom_problem == CVaRReserveUnitCommitmentCC
+else
+    throw(ArgumentError("Unrecognized formulation type. Given " * formulation))
 end
 
 optional_title =
-    (use_storage ? " stor" : "") *
-    (use_storage_reserves ? " storres" : "") *
-    (use_reg ? " reg" : "") *
-    (use_spin ? " spin" : "") *
-    (!use_must_run ? " no must run" : "") *
-    (!use_wind_curtailment ? " no curt" : "")
+    # (use_storage ? " stor" : "") *
+    # (use_storage_reserves ? " storres" : "") *
+    # (use_reg ? " reg" : "") *
+    # (use_spin ? " spin" : "") *
+    # (!use_must_run ? " no must run" : "") *
+    # (!use_wind_curtailment ? " no curt" : "")
+    " C_RR " * string(C_RR)
 
-output_path = "./results/CVaR/" * problem_dir * split(initial_time, "T")[1] * optional_title * "/"
+output_path = "./results/CVaR/" * formulation * "/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
