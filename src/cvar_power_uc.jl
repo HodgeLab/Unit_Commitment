@@ -618,7 +618,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
     if use_reg
         reservedn_constraint_reg = JuMP.@constraint(
             jump_model,
-            [g in reg⁻_device_names, t in time_steps],
+            [g in reg⁻_device_names, j in scenarios, t in time_steps],
             pg[g, j, t] - reg⁻[g, t] >= 0
         )
     end

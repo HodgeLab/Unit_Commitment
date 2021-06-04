@@ -34,7 +34,7 @@ formulation = isempty(ARGS) ? "Power" : ARGS[11]
 if formulation == "Power"
     custom_problem = CVaRPowerUnitCommitmentCC
 elseif formulation == "Reserve"
-    custom_problem == CVaRReserveUnitCommitmentCC
+    custom_problem = CVaRReserveUnitCommitmentCC
 else
     throw(ArgumentError("Unrecognized formulation type. Given " * formulation))
 end
