@@ -458,44 +458,58 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
         vg[g, t] == sum(δ_sg[g, s, t] for s in startup_categories)
     )
 
-    if use_reg
-        # Eq (17) Total reg up
-        reg⁺_constraints = JuMP.@constraint(
-            jump_model,
-            [j in scenarios, t in time_steps],
-            sum(
-                reg⁺[g, t] for g in (
-                    use_storage_reserves ? union(reg⁺_device_names, storage_names) :
-                    reg⁺_device_names
-                )
-            ) + reg⁺_S[j, t]  >=
-            required_reg⁺[t] - total_supp⁺[j, t] - (use_slack ? slack_reg⁺[t] : 0)
-        )
-        # Eq (18) Total reg down
-        reg⁻_constraints = JuMP.@constraint(
-            jump_model,
-            [j in scenarios, t in time_steps],
-            sum(
-                reg⁻[g, t] for g in (
-                    use_storage_reserves ? union(reg⁻_device_names, storage_names) :
-                    reg⁻_device_names
-                )
-            ) + reg⁻_S[j, t]  >=
-            required_reg⁻[t] - total_supp⁻[j, t] - (use_slack ? slack_reg⁻[t] : 0)
-        )
-        # Eq (20) Reg up response time
-        reg⁺_response_constraints = JuMP.@constraint(
-            jump_model,
-            [g in reg⁺_device_names, t in time_steps],
-            reg⁺[g, t] <= L_REG * ramp_up[g]
-        )
-        # Eq (21) Reg down response time
-        reg⁻_response_constraints = JuMP.@constraint(
-            jump_model,
-            [g in reg⁻_device_names, t in time_steps],
-            reg⁻[g, t] <= L_REG * ramp_dn[g]
-        )
-    end
+    # Eq (25) is included in z variable definition
+    # Eq (27) and (28) Supplemental reserve definitions as expressions instead of variables
+    total_supp⁺ = JuMP.@expression(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        sum(supp⁺[g, j, t] for g in reg⁺_device_names)
+    )
+    total_supp⁻ = JuMP.@expression(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        sum(supp⁻[g, j, t] for g in reg⁻_device_names)
+    )
+    optimization_container.expressions[:total_supp⁺] = total_supp⁺
+    optimization_container.expressions[:total_supp⁻] = total_supp⁻
+
+    # Eq (17) Total reg up
+    reg⁺_constraints = JuMP.@constraint(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        sum(
+            reg⁺[g, t] for g in (
+                use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                reg⁺_device_names
+            )
+        ) + reg⁺_S[j, t]  >=
+        required_reg⁺[t] - total_supp⁺[j, t] - (use_slack ? slack_reg⁺[t] : 0)
+    )
+    # Eq (18) Total reg down
+    reg⁻_constraints = JuMP.@constraint(
+        jump_model,
+        [j in scenarios, t in time_steps],
+        sum(
+            reg⁻[g, t] for g in (
+                use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                reg⁻_device_names
+            )
+        ) + reg⁻_S[j, t]  >=
+        required_reg⁻[t] - total_supp⁻[j, t] - (use_slack ? slack_reg⁻[t] : 0)
+    )
+    # Eq (20) Reg up response time
+    reg⁺_response_constraints = JuMP.@constraint(
+        jump_model,
+        [g in reg⁺_device_names, t in time_steps],
+        reg⁺[g, t] <= L_REG * ramp_up[g]
+    )
+    # Eq (21) Reg down response time
+    reg⁻_response_constraints = JuMP.@constraint(
+        jump_model,
+        [g in reg⁻_device_names, t in time_steps],
+        reg⁻[g, t] <= L_REG * ramp_dn[g]
+    )
+
     if use_spin
         # Eq (19) Total spin
         spin_constraints = JuMP.@constraint(
@@ -540,21 +554,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
             area_solar_forecast_scenarios[j, t] - pS[j, t]
         )
     end
-
-    # Eq (25) is included in z variable definition
-    # Eq (27) and (28) Supplemental reserve definitions as expressions instead of variables
-    total_supp⁺ = JuMP.@expression(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        sum(supp⁺[g, j, t] for g in reg⁺_device_names)
-    )
-    total_supp⁻ = JuMP.@expression(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        sum(supp⁻[g, j, t] for g in reg⁻_device_names)
-    )
-    optimization_container.expressions[:total_supp⁺] = total_supp⁺
-    optimization_container.expressions[:total_supp⁻] = total_supp⁻
 
     # Eq (26) Auxiliary variable definition
     auxiliary_constraint = JuMP.@constraint(
