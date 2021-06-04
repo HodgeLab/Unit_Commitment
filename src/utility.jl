@@ -1,9 +1,9 @@
 
 function get_area_total_time_series(
-    problem::Union{PSI.OperationsProblem{CVaRPowerUnitCommitmentCC}, PSI.OperationsProblem{CVaRReserveUnitCommitmentCC}},
+    problem::PSI.OperationsProblem{T},
     type::DataType; 
     filter = nothing
-    )
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
@@ -31,10 +31,10 @@ end
 
 # Unconventional route. To be cleaned later.
 function PSI.write_to_CSV(
-    problem::Union{PSI.OperationsProblem{CVaRPowerUnitCommitmentCC}, PSI.OperationsProblem{CVaRReserveUnitCommitmentCC}},
+    problem::PSI.OperationsProblem{T},
     output_path::String;
     time = nothing
-)
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
     exclusions = [:λ, :β] # PWL chunks, expensive to export and useless
@@ -50,15 +50,14 @@ function PSI.write_to_CSV(
 end
 
 function _write_summary_stats(
-    problem::Union{PSI.OperationsProblem{CVaRPowerUnitCommitmentCC}, PSI.OperationsProblem{CVaRReserveUnitCommitmentCC}},
+    problem::PSI.OperationsProblem{T},
     output_path::String,
     solvetime::Union{Nothing, Float64}
-)
+) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
     optimization_container = PSI.get_optimization_container(problem)
     system = PSI.get_system(problem)
     time_steps = PSI.model_time_steps(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
-    use_storage = problem.ext["use_storage"]
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     C_RR = problem.ext["C_RR"]
@@ -141,8 +140,91 @@ function _write_summary_stats(
         output["Penalty cost overgeneration"]
     end
 
+    CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
+end
 
 
+function _write_summary_stats(
+    problem::PSI.OperationsProblem{T},
+    output_path::String,
+    solvetime::Union{Nothing, Float64}
+) where T <: BasecaseUnitCommitmentCC
+    optimization_container = PSI.get_optimization_container(problem)
+    system = PSI.get_system(problem)
+    time_steps = PSI.model_time_steps(optimization_container)
+    use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
+    use_reg = problem.ext["use_reg"]
+    use_spin = problem.ext["use_spin"]
+    C_res_penalty = problem.ext["C_res_penalty"]
+    C_ener_penalty = problem.ext["C_ener_penalty"]
+
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+    no_load_cost = Dict(
+        g => get_no_load(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
+    )
+    shutdown_cost = Dict(
+        g => get_shut_down(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
+    )
+    startup_cost = Dict(
+        g => get_start_up(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
+    )
+
+    obj_dict = PSI.get_jump_model(optimization_container).obj_dict
+    ug = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])
+    wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])
+    δ_sg = obj_dict[:δ_sg]
+    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data
+
+    output = Dict(
+        "Solve time (s)" => solvetime,
+        "C_res_penalty" => C_res_penalty,
+        "C_ener_penalty" => C_ener_penalty,
+        "Hot start cost" => JuMP.value(sum(startup_cost[g][:hot] * δ_sg[g, :hot, t] for g in thermal_gen_names, t in time_steps)),
+        "Warm start cost" => JuMP.value(sum(startup_cost[g][:warm] * δ_sg[g, :warm, t] for g in thermal_gen_names, t in time_steps)),
+        "Cold start cost" => JuMP.value(sum(startup_cost[g][:cold] * δ_sg[g, :cold, t] for g in thermal_gen_names, t in time_steps)),
+        "No-load cost" => sum(sum(ug[!, n] .* no_load_cost[n]) for n in names(ug)),
+        "Variable cost" => sum(Cg) / (ndims(Cg) == 3 ? size(Cg)[2] : 1),
+        "Shut-down cost" => sum(sum(wg[!, n] .* shutdown_cost[n]) for n in names(wg)),
+    )
+    output["Start-up cost"] =
+        output["Hot start cost"] +
+        output["Warm start cost"] +
+        output["Cold start cost"]
+    output["Total cost"] =
+        output["No-load cost"] +
+        output["Variable cost"] +
+        output["Start-up cost"] +
+        output["Shut-down cost"]
+
+    if use_slack
+        if use_reg
+            slack_reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])
+            slack_reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])
+        end
+        if use_spin
+            slack_spin = PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])
+        end
+        slack_energy⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁺], [:slack_energy⁺])
+        slack_energy⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])
+    end
+
+    if use_slack
+        if use_reg
+            output["Penalty cost unserved reg up"] = C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺])
+            output["Penalty cost unserved reg down"] = C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻])
+        end
+        if use_spin
+            output["Penalty cost unserved spin"] = C_res_penalty * sum(slack_spin[!, :slack_spin])
+        end
+        output["Penalty cost unserved load"] = C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺])
+        output["Penalty cost overgeneration"] = C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻])
+
+        output["Total cost with penalties"] = output["Total cost"] +
+        (use_reg ? output["Penalty cost unserved reg up"] + output["Penalty cost unserved reg down"] : 0) +
+        (use_spin ? output["Penalty cost unserved spin"] : 0) +
+        output["Penalty cost unserved load"] +
+        output["Penalty cost overgeneration"]
+    end
 
     CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
 end
