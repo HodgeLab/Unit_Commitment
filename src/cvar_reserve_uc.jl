@@ -305,12 +305,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
 
     # Eq (6) PWL variable cost constraint
     # PWL Cost function auxiliary variables
-    lambda_bound = JuMP.@constraint(
-        jump_model,
-        [g in thermal_gen_names, j in scenarios, i in 1:length(variable_cost[g]), t in time_steps],
-        0 <= λ[g, j, i, t] <= PSY.get_breakpoint_upperbounds(variable_cost[g])[i]
-    )
-
     lambda_constraint = JuMP.@constraint(
         jump_model,
         [g in thermal_gen_names, j in scenarios, t in time_steps],
