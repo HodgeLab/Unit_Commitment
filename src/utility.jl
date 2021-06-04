@@ -82,7 +82,7 @@ function _write_summary_stats(
     wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])
     z = PSI.axis_array_to_dataframe(obj_dict[:z], [:z])
     δ_sg = obj_dict[:δ_sg]
-    Cg = PSI.axis_array_to_dataframe(JuMP.value.(optimization_container.expressions[:Cg]))
+    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data
 
     output = Dict(
         "Solve time (s)" => solvetime,
@@ -95,7 +95,7 @@ function _write_summary_stats(
         "Warm start cost" => JuMP.value(sum(startup_cost[g][:warm] * δ_sg[g, :warm, t] for g in thermal_gen_names, t in time_steps)),
         "Cold start cost" => JuMP.value(sum(startup_cost[g][:cold] * δ_sg[g, :cold, t] for g in thermal_gen_names, t in time_steps)),
         "No-load cost" => sum(sum(ug[!, n] .* no_load_cost[n]) for n in names(ug)),
-        "Variable cost" => sum(sum(eachcol(Cg))),
+        "Variable cost" => sum(Cg) / (ndims(Cg) == 3 ? size(Cg)[2] : 1),
         "Shut-down cost" => sum(sum(wg[!, n] .* shutdown_cost[n]) for n in names(wg)),
         "CVaR cost" =>
         C_RR * (PSI._jump_value(obj_dict[:β]) + 1 / (nrow(z) * (1 - α)) * sum(z[!, :z]))
