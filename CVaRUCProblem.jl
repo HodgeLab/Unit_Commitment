@@ -46,7 +46,7 @@ optional_title =
     # (use_spin ? " spin" : "") *
     # (!use_must_run ? " no must run" : "") *
     # (!use_wind_curtailment ? " no curt" : "")
-    " C_RR " * string(C_RR)
+    " C_RR " * string(C_RR) * " alpha " * string(α)
 
 output_path = "./results/CVaR/" * formulation * "/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
