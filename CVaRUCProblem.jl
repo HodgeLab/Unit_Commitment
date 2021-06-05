@@ -1,4 +1,4 @@
-# To run: julia --project CVaRUCProblem.jl true true true true true true true 1000 0.25 0.80 Power
+# To run: julia --project CVaRUCProblem.jl true true true true true true 1000 0.25 0.80 Power
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -24,12 +24,11 @@ use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
-use_wind_curtailment = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
-C_RR = isempty(ARGS) ? 4000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
-L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
-α = isempty(ARGS) ? 0 : parse(Float64, ARGS[10]) # Risk tolerance level
-formulation = isempty(ARGS) ? "Power" : ARGS[11]
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[6])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[7]) # Penalty cost of recourse reserve
+L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[8]) # 15 min response time, to start
+α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[9]) # Risk tolerance level
+formulation = isempty(ARGS) ? "Power" : ARGS[10]
 
 if formulation == "Power"
     custom_problem = CVaRPowerUnitCommitmentCC
@@ -45,7 +44,6 @@ optional_title =
     # (use_reg ? " reg" : "") *
     # (use_spin ? " spin" : "") *
     # (!use_must_run ? " no must run" : "") *
-    # (!use_wind_curtailment ? " no curt" : "")
     " C_RR " * string(C_RR) * " alpha " * string(α)
 
 output_path = "./results/CVaR/" * formulation * "/" * split(initial_time, "T")[1] * optional_title * "/"
@@ -103,7 +101,6 @@ UC.ext["use_storage_reserves"] = use_storage_reserves
 UC.ext["use_reg"] = use_reg
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
-UC.ext["use_wind_curtailment"] = use_wind_curtailment
 UC.ext["C_RR"] = C_RR
 UC.ext["L_SUPP"] = L_SUPP
 UC.ext["α"] = α

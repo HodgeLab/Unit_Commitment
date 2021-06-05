@@ -6,7 +6,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]
-    use_wind_curtailment = problem.ext["use_wind_curtailment"]
     C_RR = problem.ext["C_RR"]
     L_SUPP = problem.ext["L_SUPP"]
     α = problem.ext["α"]
@@ -191,11 +190,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
         binary = true
     )
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, j in scenarios, t in time_steps] >= 0) # power ABOVE MINIMUM
-    if use_wind_curtailment # Define solar as either variable or fixed data
-        pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
-    else
-        pW = total_wind
-    end
+    pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
     pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
     if use_reg
         reg⁺ = JuMP.@variable(
@@ -268,10 +263,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRPowerUnitCommitme
     # -------------------------------------------------------------
 
     # Eq (5) Wind constraint
-    if use_wind_curtailment
-        wind_constraint =
-            JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t])
-    end
+    wind_constraint =
+        JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t])
 
     # Eq (6) PWL variable cost constraint
     # PWL Cost function auxiliary variables

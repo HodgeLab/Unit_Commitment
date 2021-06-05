@@ -133,7 +133,6 @@ function PG.get_generation_data(
     time_steps;
     kwargs...,
 ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
-    curtailment = get(kwargs, :curtailment, true)
     storage = get(kwargs, :storage, true)
     use_slack = get(kwargs, :use_slack, true)
 
@@ -197,7 +196,6 @@ end
 function my_categorize_data(
     data::Dict{Symbol, DataFrames.DataFrame},
     cat::Dict;
-    curtailment = true,
     slacks = true,
     kwargs...,
 )
