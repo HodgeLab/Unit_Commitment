@@ -4,7 +4,8 @@ using PowerSystems
 using Dates
 using CSV
 using DataFrames
-# using PowerGraphics
+using PowerGraphics
+plotlyjs()
 
 ## Local
 using Xpress
@@ -85,4 +86,13 @@ UC.ext["L_SPIN"] = 1 / 6 # 10 min
 build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
 (status, solvetime) = @timed solve!(UC)
 
-write_to_CSV(UC, output_path; time=solvetime)
+if status.value == 0
+    write_to_CSV(UC, output_path; time=solvetime)
+
+    plot_fuel(
+        UC;
+        scenario = scenario,
+        save_dir = output_path,
+    )
+
+end

@@ -116,47 +116,15 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 if status.value == 0
     write_to_CSV(UC, output_path; time=solvetime)
 
-    # Scenario 69 is low on the morning of June 20th
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_wind_curtailment,
-        scenario = 69,
-        save_dir = output_path,
-        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
-    )
-
     # Scenario 12 is high on the morning of June 20th
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_wind_curtailment,
-        scenario = 12,
-        save_dir = output_path,
-        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
-    )
-
-    # Scenario 82 is the highest scenario on May 1st
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_wind_curtailment,
-        scenario = 82,
-        save_dir = output_path,
-        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
-    )
-
     # 53 is one of the lowest scenarios in the afternoon on May 1st
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_wind_curtailment,
-        scenario = 53,
-        save_dir = output_path,
-        use_slack = PSI.get_balance_slack_variables(UC.internal.optimization_container.settings)
-    )
+    # Scenario 69 is low on the morning of June 20th
+    # Scenario 82 is the highest scenario on May 1st
+    for scenario in (12, 53, 69, 82)
+        plot_fuel(
+            UC;
+            scenario = scenario,
+            save_dir = output_path,
+        )
+    end
 end

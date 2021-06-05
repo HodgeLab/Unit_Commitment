@@ -3,9 +3,7 @@ function PG.plot_fuel(
     kwargs...) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
     title = get(kwargs, :title, "Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
-    storage = get(kwargs, :storage, true)
     scenario = get(kwargs, :scenario, 1)
-    case_initial_time = get(kwargs, :case_initial_time, nothing)
     time_steps = get(kwargs, :time_steps, nothing)
 
     p = PG._empty_plot()
@@ -13,10 +11,13 @@ function PG.plot_fuel(
 
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
+    case_initial_time = PSI.get_initial_time(problem)
     jump_model = PSI.get_jump_model(optimization_container)
     if isnothing(time_steps)
         time_steps = PSI.model_time_steps(optimization_container)
     end
+    use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
+    storage = problem.ext["use_storage"]
 
     total_load = get_area_total_time_series(problem, PowerLoad)[time_steps].*1.15
     total_hydro = get_area_total_time_series(problem, HydroGen)[time_steps]
@@ -26,31 +27,26 @@ function PG.plot_fuel(
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )[time_steps]
 
-    area = PSY.get_component(Area, system, "1")
-    scenario_forecast = permutedims(
-        PSY.get_time_series_values(
-            Scenarios,
-            area,
-            "solar_power";
-            start_time = case_initial_time,
-        ) ./ 100,
-    )[
-        scenario,
-        time_steps,
-    ]
+    solar_forecast = _get_solar_forecast(problem,
+        time_steps;
+        kwargs...)
 
     gen = get_generation_data(
         problem,
         total_wind,
         total_hydro,
         scenario,
-        scenario_forecast,
+        solar_forecast,
         time_steps;
-        kwargs...,
+        kwargs...
     )
     cat = make_fuel_dictionary(system)
 
-    fuel = my_categorize_data(gen.data, cat; kwargs...)
+    fuel = my_categorize_data(gen.data,
+        cat,
+        use_slack,
+        storage
+    )
 
     # Hack to make nuclear on the bottom and curtailment on top
     cat_names = intersect(PG.CATEGORY_DEFAULT, keys(fuel))
@@ -60,7 +56,9 @@ function PG.plot_fuel(
     y_label = get(kwargs, :y_label, "Generation (GW)")
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
-    DataFrames.rename!(fuel_agg, Dict("Imports/Exports" => "Supp⁺"))
+    if :supp⁺ in keys(gen.data)
+        DataFrames.rename!(fuel_agg, Dict("Imports/Exports" => "Supp⁺"))
+    end
     p = plot_dataframe(
         fuel_agg,
         gen.time;
@@ -114,7 +112,7 @@ function PG.plot_fuel(
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
         format = get(kwargs, :format, "png")
-        fname = joinpath(save_dir, "$title Scenario $scenario.$format")
+        fname = _get_save_path(problem, title, format, save_dir; kwargs)
         # Overwrite existing plots
         if isfile(fname)
             rm(fname)
@@ -129,58 +127,67 @@ function PG.get_generation_data(
     total_wind,
     total_hydro,
     scenario,
-    scenario_forecast,
+    solar_forecast,
     time_steps;
     kwargs...,
 ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
-    storage = get(kwargs, :storage, true)
-    use_slack = get(kwargs, :use_slack, true)
+    storage = problem.ext["use_storage"]
+    use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
 
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
 
-    # Power variable names
     var_names = Vector{Symbol}()
-    push!(var_names, :pg)
     if storage
         push!(var_names, :pb_in, :pb_out)
     end
     if use_slack
         push!(var_names, :slack_energy⁺)
     end
-
     variables = Dict{Symbol, DataFrames.DataFrame}()
     for v in var_names
         variables[v] = PSI.axis_array_to_dataframe(jump_model.obj_dict[v], [v])[time_steps, :]
-        if v == :pg
-            Pg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[time_steps, :]
-            for n in names(Pg)
-                Pg[!, n] .*=
-                    get_active_power_limits(get_component(ThermalMultiStart, system, n)).min
-            end
-            variables[v] .+= Pg
-        end
     end
-    # Select single solar scenario
-    if curtailment
-        variables[:pS] =
-        PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[time_steps, [scenario]]
-        variables[:pW] =
-            PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])[time_steps, :]
+
+    # Get power above min
+    pg = jump_model.obj_dict[:pg]
+    if length(size(pg)) == 2
+        variables[:pg] = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pg], [:pg])[time_steps, :]
+    elseif length(size(pg)) == 3
+        variables[:pg] = _scenario_in_3D_array_to_dataframe(
+            pg,
+            scenario,
+            time_steps)
     else
-        variables[:pW] = DataFrames.DataFrame(Dict(:pW => total_wind))
-        variables[:pS] = DataFrames.DataFrame(Dict(:pW => scenario_forecast))
+        throw(ErrorException("Only have plot methods for pg of 2 or 3 dimensions"))
     end
+    # Add the min level
+    Pg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[time_steps, :]
+    for n in names(Pg)
+        Pg[!, n] .*=
+            get_active_power_limits(get_component(ThermalMultiStart, system, n)).min
+    end
+    variables[:pg] .+= Pg
+
+    # Select single solar scenario
+    variables[:pS] = _get_solar_realization(problem, time_steps; kwargs)
+    variables[:pW] =
+        PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])[time_steps, :]
     variables[:pH] = DataFrames.DataFrame(Dict(:pH => total_hydro))
 
-    # Supp is 3D transformed to 2D; select single scenario out
-    x = PSI.axis_array_to_dataframe(jump_model.obj_dict[:supp⁺], [:supp⁺])
-    variables[:supp⁺] = (x[x[!, :S1] .== scenario, names(x) .!= "S1"])[time_steps, :]
+    if :supp⁺ in keys(jump_model.obj_dict)
+        # Supp is 3D transformed to 2D; select single scenario out
+        variables[:supp⁺] = _scenario_in_3D_array_to_dataframe(
+            jump_model.obj_dict[:supp⁺],
+            scenario,
+            time_steps
+        )
+    end
 
     variables[:curt] = DataFrames.DataFrame(
         :curt =>
-            total_wind - variables[:pW][!, 1] + scenario_forecast -
+            total_wind - variables[:pW][!, 1] + solar_forecast -
             variables[:pS][!, 1],
     )
 
@@ -193,13 +200,31 @@ function PG.get_generation_data(
     return PG.PGData(variables, timestamps)
 end
 
+function _scenario_in_3D_array_to_dataframe(
+    input_array::JuMP.Containers.DenseAxisArray{},
+    scenario,
+    time_steps
+    )
+    result = Array{Float64, 2}(
+            undef,
+            length(time_steps),
+            length(input_array.axes[1]),
+        )
+        names = Array{Symbol, 1}(undef, length(input_array.axes[1]))
+    for t in time_steps, (ix, name) in enumerate(input_array.axes[1])
+        result[t, ix] = PSI._jump_value(input_array[name, scenario, t])
+        names[ix] = Symbol(name)
+    end
+
+    return DataFrames.DataFrame(result, names)
+end
+
 function my_categorize_data(
     data::Dict{Symbol, DataFrames.DataFrame},
-    cat::Dict;
-    slacks = true,
-    kwargs...,
+    cat::Dict,
+    use_slack,
+    storage
 )
-    storage = get(kwargs, :storage, true)
     category_dataframes = Dict{String, DataFrames.DataFrame}()
     var_types = Dict([("ThermalMultiStart", :pg)])
     if storage
@@ -225,12 +250,102 @@ function my_categorize_data(
     category_dataframes["Wind"] = data[:pW]
     category_dataframes["Hydropower"] = data[:pH]
     category_dataframes["PV"] = data[:pS]
-    # Hack to match color, will be renamed
-    category_dataframes["Imports/Exports"] = data[:supp⁺]
+    if :supp⁺ in keys(gen.data)
+        # Hack to match color, will be renamed
+        category_dataframes["Imports/Exports"] = data[:supp⁺]
+    end
     category_dataframes["Curtailment"] = data[:curt]
-    if get(kwargs, :use_slack, true)
+    if use_slack
         category_dataframes["Unserved Energy"] = data[:slack_energy⁺]
     end
 
     return category_dataframes
+end
+
+function _get_solar_forecast(
+    problem::PSI.OperationsProblem{T},
+    time_steps;
+    kwargs...
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
+    scenario = get(kwargs, :scenario, 1)
+
+    system = PSI.get_system(problem)
+    case_initial_time = PSI.get_initial_time(problem)
+
+    area = PSY.get_component(Area, system, "1")
+    scenario_forecast = permutedims(
+        PSY.get_time_series_values(
+            Scenarios,
+            area,
+            "solar_power";
+            start_time = case_initial_time,
+        ) ./ 100,
+    )[
+        scenario,
+        time_steps,
+    ]
+    return scenario_forecast
+end
+
+function _get_solar_forecast(
+    problem::PSI.OperationsProblem{T},
+    time_steps;
+    kwargs...
+    ) where T <: BasecaseUnitCommitmentCC
+
+    forecast = get_area_total_time_series(
+            problem,
+            RenewableGen;
+            filter = x -> get_prime_mover(x) == PrimeMovers.PVe && get_available(x),
+        )[time_steps]
+
+    return forecast
+end
+
+function _get_solar_realization(
+    problem::PSI.OperationsProblem{T},
+    time_steps;
+    kwargs...
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
+    scenario = get(kwargs, :scenario, 1)
+
+    optimization_container = PSI.get_optimization_container(problem)
+    jump_model = PSI.get_jump_model(optimization_container)
+    solar = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[time_steps, [scenario]]
+    return solar
+end
+
+function _get_solar_realization(
+    problem::PSI.OperationsProblem{T},
+    time_steps;
+    kwargs...
+    ) where T <: BasecaseUnitCommitmentCC
+
+    optimization_container = PSI.get_optimization_container(problem)
+    jump_model = PSI.get_jump_model(optimization_container)
+    solar = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pS], [:pS])[time_steps, :]
+    return solar
+end
+
+function _get_save_path(
+    problem,
+    title,
+    format,
+    save_dir;
+    kwargs...
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
+    scenario = get(kwargs, :scenario, 1)
+    fname = joinpath(save_dir, "$title Scenario $scenario.$format")
+    return fname
+end
+
+function _get_save_path(
+    problem,
+    title,
+    format,
+    save_dir;
+    kwargs...
+    ) where T <: BasecaseUnitCommitmentCC
+    fname = joinpath(save_dir, "$title.$format")
+    return fname
 end
