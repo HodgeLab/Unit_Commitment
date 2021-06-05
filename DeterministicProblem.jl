@@ -105,7 +105,6 @@ for month in 1:12
 
             plot_fuel(
                 UC;
-                scenario = scenario,
                 save_dir = output_path,
             )
 
