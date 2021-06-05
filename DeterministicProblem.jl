@@ -20,8 +20,9 @@ use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
+scenarios = 31
 
-output_path = "./results/Deterministic/" * split(initial_time, "T")[1]
+output_path = "./results/" * string(scenarios) * " scenarios/Deterministic/" * split(initial_time, "T")[1]
 
 if !isdir(output_path)
     mkpath(output_path)
@@ -33,7 +34,7 @@ end
 system_file_path = "data/"
 
 system_da = System(
-    joinpath(system_file_path, "DA_sys_84_scenarios.json");
+    joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
     time_series_read_only = true,
 )
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)

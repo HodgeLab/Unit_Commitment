@@ -29,6 +29,7 @@ C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[7]) # Penalty cost of recourse
 L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[8]) # 15 min response time, to start
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[9]) # Risk tolerance level
 formulation = isempty(ARGS) ? "Power" : ARGS[10]
+scenarios = 31
 
 if formulation == "Power"
     custom_problem = CVaRPowerUnitCommitmentCC
@@ -46,7 +47,7 @@ optional_title =
     # (!use_must_run ? " no must run" : "") *
     " C_RR " * string(C_RR) * " alpha " * string(α)
 
-output_path = "./results/CVaR/" * formulation * "/" * split(initial_time, "T")[1] * optional_title * "/"
+output_path = "./results/" * string(scenarios) * " scenarios/CVaR/" * formulation * "/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
@@ -57,7 +58,7 @@ end
 system_file_path = "data/"
 
 system_da = System(
-    joinpath(system_file_path, "DA_sys_84_scenarios.json");
+    joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
     time_series_read_only = true,
 )
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
