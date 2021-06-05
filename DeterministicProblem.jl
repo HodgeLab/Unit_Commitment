@@ -1,4 +1,4 @@
-# To run: julia --project DeterministicProblem.jl true true true true true
+# To run: julia --project DeterministicProblem.jl true true true true true true
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -22,6 +22,7 @@ use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 scenarios = 31
 
 ## Jose
@@ -71,7 +72,7 @@ for month in 1:12
 
         # Jose's tune-ups for the HA UC
         for system in [system_da] # [system_da, system_ha, system_ed]
-            apply_manual_data_updates!(system)
+            apply_manual_data_updates!(system, use_nuclear)
         end
 
         UC = OperationsProblem(
