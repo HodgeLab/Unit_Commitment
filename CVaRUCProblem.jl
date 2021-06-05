@@ -117,11 +117,7 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 if status.value == 0
     write_to_CSV(UC, output_path; time=solvetime)
 
-    # Scenario 12 is high on the morning of June 20th
-    # 53 is one of the lowest scenarios in the afternoon on May 1st
-    # Scenario 69 is low on the morning of June 20th
-    # Scenario 82 is the highest scenario on May 1st
-    for scenario in (12, 53, 69, 82)
+    for scenario in 1:scenarios
         plot_fuel(
             UC;
             scenario = scenario,

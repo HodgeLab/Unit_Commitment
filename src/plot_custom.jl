@@ -64,7 +64,7 @@ function PG.plot_fuel(
         gen.time;
         seriescolor = seriescolor,
         y_label = y_label,
-        title = title,
+        title = nothing,
         stack = true,
         set_display = false,
         kwargs...,
@@ -83,7 +83,7 @@ function PG.plot_fuel(
         gen.time;
         seriescolor = ["black"],
         y_label = y_label,
-        title = title,
+        title = nothing,
         stack = true,
         nofill = true,
         set_display = false,
@@ -101,7 +101,7 @@ function PG.plot_fuel(
             gen.time;
             seriescolor = [col],
             y_label = y_label,
-            title = title,
+            title = nothing,
             stack = true,
             nofill = true,
             set_display = false,
@@ -111,13 +111,15 @@ function PG.plot_fuel(
 
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
-        format = get(kwargs, :format, "png")
-        fname = _get_save_path(problem, title, format, save_dir; kwargs)
-        # Overwrite existing plots
-        if isfile(fname)
-            rm(fname)
+        for format in ("png", "pdf")
+        # format = get(kwargs, :format, "png")
+            fname = _get_save_path(problem, title, format, save_dir; kwargs)
+            # Overwrite existing plots
+            if isfile(fname)
+                rm(fname)
+            end
+            PG.save_plot(p, fname, backend)
         end
-        PG.save_plot(p, fname, backend)
     end
     return p
 end
@@ -250,7 +252,7 @@ function my_categorize_data(
     category_dataframes["Wind"] = data[:pW]
     category_dataframes["Hydropower"] = data[:pH]
     category_dataframes["PV"] = data[:pS]
-    if :supp⁺ in keys(gen.data)
+    if :supp⁺ in keys(data)
         # Hack to match color, will be renamed
         category_dataframes["Imports/Exports"] = data[:supp⁺]
     end
@@ -328,7 +330,7 @@ function _get_solar_realization(
 end
 
 function _get_save_path(
-    problem,
+    problem::PSI.OperationsProblem{T},
     title,
     format,
     save_dir;
@@ -340,7 +342,7 @@ function _get_save_path(
 end
 
 function _get_save_path(
-    problem,
+    problem::PSI.OperationsProblem{T},
     title,
     format,
     save_dir;
