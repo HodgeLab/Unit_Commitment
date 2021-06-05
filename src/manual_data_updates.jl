@@ -1,4 +1,4 @@
-function appply_manual_data_updates!(system, use_nuclear)
+function apply_manual_data_updates!(system, use_nuclear)
     for g in get_components(
         RenewableDispatch,
         system,

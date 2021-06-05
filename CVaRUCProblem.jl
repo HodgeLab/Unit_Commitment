@@ -66,7 +66,7 @@ system_da = System(
 
 # Jose's tune-ups for the HA UC
 for system in [system_da] # [system_da, system_ha, system_ed]
-    appply_manual_data_updates!(system, use_nuclear)
+    apply_manual_data_updates!(system, use_nuclear)
 end
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
