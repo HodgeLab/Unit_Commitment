@@ -1,3 +1,5 @@
+# To run: julia --project DeterministicProblem.jl true true true true true
+
 include("src/Unit_commitment.jl")
 using PowerSimulations
 using PowerSystems
@@ -14,19 +16,13 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-initial_time = "2018-06-20T00:00:00"
+
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 scenarios = 31
-
-output_path = "./results/" * string(scenarios) * " scenarios/Deterministic/" * split(initial_time, "T")[1]
-
-if !isdir(output_path)
-    mkpath(output_path)
-end
 
 ## Jose
 # system_file_path = "/Users/jdlara/cache/blue_texas/"
@@ -39,11 +35,6 @@ system_da = System(
 )
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
 # system_ed = System("data/RT_sys.json"; time_series_read_only = true)
-
-# Jose's tune-ups for the HA UC
-for system in [system_da] # [system_da, system_ha, system_ed]
-    appply_manual_data_updates!(system)
-end
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
 # template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
@@ -62,38 +53,61 @@ set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitm
 # ignore HA for now
 # set_device_model!(template_ed, ThermalMultiStart, ThermalRampLimited)
 
-UC = OperationsProblem(
-    BasecaseUnitCommitmentCC,
-    template_dauc,
-    system_da,
-    optimizer = solver,
-    initial_time = DateTime(initial_time),
-    optimizer_log_print = true,
-    balance_slack_variables = false,
-)
-UC.ext["cc_restrictions"] =
-    JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
-UC.ext["use_storage"] = use_storage
-UC.ext["use_storage_reserves"] = use_storage_reserves
-UC.ext["use_reg"] = use_reg
-UC.ext["use_spin"] = use_spin
-UC.ext["use_must_run"] = use_must_run
-UC.ext["C_res_penalty"] = 5000
-UC.ext["C_ener_penalty"] = 100000
-UC.ext["L_REG"] = 1 / 12 # 5 min
-UC.ext["L_SPIN"] = 1 / 6 # 10 min
+optional_title =
+    (use_storage ? " stor" : "") *
+    (use_storage_reserves ? " storres" : "")
 
-# Build and solve the standalone problem
-build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
-(status, solvetime) = @timed solve!(UC)
+days_per_month = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+for month in 1:12
+    for d in days_per_month[month]
+        initial_time = "2018-" * (month < 10 ? "0" * string(month) : string(month)) *
+            "-" * string(d) * "T00:00:00"
 
-if status.value == 0
-    write_to_CSV(UC, output_path; time=solvetime)
+        output_path = "./results/" * string(scenarios) * " scenarios/Deterministic/" * split(initial_time, "T")[1] * optional_title * "/"
 
-    plot_fuel(
-        UC;
-        scenario = scenario,
-        save_dir = output_path,
-    )
+        if !isdir(output_path)
+            mkpath(output_path)
+        end
 
+        # Jose's tune-ups for the HA UC
+        for system in [system_da] # [system_da, system_ha, system_ed]
+            apply_manual_data_updates!(system)
+        end
+
+        UC = OperationsProblem(
+            BasecaseUnitCommitmentCC,
+            template_dauc,
+            system_da,
+            optimizer = solver,
+            initial_time = DateTime(initial_time),
+            optimizer_log_print = true,
+            balance_slack_variables = false,
+        )
+        UC.ext["cc_restrictions"] =
+            JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
+        UC.ext["use_storage"] = use_storage
+        UC.ext["use_storage_reserves"] = use_storage_reserves
+        UC.ext["use_reg"] = use_reg
+        UC.ext["use_spin"] = use_spin
+        UC.ext["use_must_run"] = use_must_run
+        UC.ext["C_res_penalty"] = 5000
+        UC.ext["C_ener_penalty"] = 100000
+        UC.ext["L_REG"] = 1 / 12 # 5 min
+        UC.ext["L_SPIN"] = 1 / 6 # 10 min
+
+        # Build and solve the standalone problem
+        build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
+        (status, solvetime) = @timed solve!(UC)
+
+        if status.value == 0
+            write_to_CSV(UC, output_path; time=solvetime)
+
+            plot_fuel(
+                UC;
+                scenario = scenario,
+                save_dir = output_path,
+            )
+
+        end
+    end
 end
