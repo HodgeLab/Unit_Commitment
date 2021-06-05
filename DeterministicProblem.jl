@@ -60,7 +60,7 @@ optional_title =
 
 days_per_month = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 for month in 1:12
-    for d in days_per_month[month]
+    for d in 1:days_per_month[month]
         initial_time = "2018-" * (month < 10 ? "0" * string(month) : string(month)) *
             "-" * string(d) * "T00:00:00"
 
