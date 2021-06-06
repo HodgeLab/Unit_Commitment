@@ -134,3 +134,4 @@ experimental_notes.jl
 DA_preliminary_model.jl
 *.sh
 xpress_keys.csv
+*.out

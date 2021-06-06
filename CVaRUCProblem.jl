@@ -1,4 +1,4 @@
-# To run: julia --project CVaRUCProblem.jl true true true true true true true 1000 0.25 0.20
+# To run: julia --project CVaRUCProblem.jl true true true true true true 1000 0.25 0.80 Power
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -16,27 +16,38 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-initial_time = "2018-04-20T00:00:00"
+# May 1st: under low tail in afternoon (Day 121)
+# June 20th: Low tail in morning (Day 171)
+initial_time = "2018-06-20T00:00:00"
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
-use_curtailment = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
-C_RR = isempty(ARGS) ? 4000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
-L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
-α = isempty(ARGS) ? 0.20 : parse(Float64, ARGS[10]) # Risk tolerance level
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[6])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[7]) # Penalty cost of recourse reserve
+L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[8]) # 15 min response time, to start
+α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[9]) # Risk tolerance level
+formulation = isempty(ARGS) ? "Power" : ARGS[10]
+scenarios = 31
+
+if formulation == "Power"
+    custom_problem = CVaRPowerUnitCommitmentCC
+elseif formulation == "Reserve"
+    custom_problem = CVaRReserveUnitCommitmentCC
+else
+    throw(ArgumentError("Unrecognized formulation type. Given " * formulation))
+end
 
 optional_title =
-    (use_storage ? " stor" : "") *
-    (use_storage_reserves ? " storres" : "") *
-    (use_reg ? " reg" : "") *
-    (use_spin ? " spin" : "") *
-    (!use_must_run ? " no must run" : "") *
-    (!use_curtailment ? " no curt" : "")
+    # (use_storage ? " stor" : "") *
+    # (use_storage_reserves ? " storres" : "") *
+    # (use_reg ? " reg" : "") *
+    # (use_spin ? " spin" : "") *
+    # (!use_must_run ? " no must run" : "") *
+    " C_RR " * string(C_RR) * " alpha " * string(α)
 
-output_path = "./results/CVaR/" * split(initial_time, "T")[1] * optional_title * "/"
+output_path = "./results/" * string(scenarios) * " scenarios/CVaR/" * formulation * "/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
@@ -47,7 +58,7 @@ end
 system_file_path = "data/"
 
 system_da = System(
-    joinpath(system_file_path, "DA_sys_84_scenarios.json");
+    joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
     time_series_read_only = true,
 )
 # system_ha = System("data/HA_sys.json"; time_series_read_only = true)
@@ -55,7 +66,7 @@ system_da = System(
 
 # Jose's tune-ups for the HA UC
 for system in [system_da] # [system_da, system_ha, system_ed]
-    appply_manual_data_updates!(system, use_nuclear)
+    apply_manual_data_updates!(system, use_nuclear)
 end
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
@@ -76,13 +87,13 @@ set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitm
 # set_device_model!(template_ed, ThermalMultiStart, ThermalRampLimited)
 
 UC = OperationsProblem(
-    CVaRUnitCommitmentCC,
+    custom_problem,
     template_dauc,
     system_da,
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = true,
-    balance_slack_variables = true,
+    balance_slack_variables = false,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
@@ -91,36 +102,26 @@ UC.ext["use_storage_reserves"] = use_storage_reserves
 UC.ext["use_reg"] = use_reg
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
-UC.ext["use_curtailment"] = use_curtailment
 UC.ext["C_RR"] = C_RR
 UC.ext["L_SUPP"] = L_SUPP
 UC.ext["α"] = α
 UC.ext["C_res_penalty"] = 5000
 UC.ext["C_ener_penalty"] = 100000
+UC.ext["L_REG"] = 1 / 12 # 5 min
+UC.ext["L_SPIN"] = 1 / 6 # 10 min
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
 (status, solvetime) = @timed solve!(UC)
 
 if status.value == 0
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_curtailment,
-        scenario = 1,
-        save_dir = nothing,
-        time_steps = 1:24
-    )
-
-    plot_fuel(
-        UC;
-        case_initial_time = DateTime(initial_time),
-        storage = use_storage,
-        curtailment = use_curtailment,
-        scenario = 80,
-        save_dir = output_path,
-    )
-
     write_to_CSV(UC, output_path; time=solvetime)
+
+    for scenario in 1:scenarios
+        plot_fuel(
+            UC;
+            scenario = scenario,
+            save_dir = output_path,
+        )
+    end
 end
