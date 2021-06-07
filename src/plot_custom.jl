@@ -3,7 +3,7 @@ function PG.plot_fuel(
     kwargs...) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
     title = get(kwargs, :title, "Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
-    scenario = get(kwargs, :scenario, 1)
+    scenario = kwargs[:scenario]
     time_steps = get(kwargs, :time_steps, nothing)
 
     p = PG._empty_plot()
@@ -112,8 +112,7 @@ function PG.plot_fuel(
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
         for format in ("png", "pdf")
-        # format = get(kwargs, :format, "png")
-            fname = _get_save_path(problem, title, format, save_dir; kwargs)
+            fname = _get_save_path(problem, title, format, save_dir; kwargs...)
             # Overwrite existing plots
             if isfile(fname)
                 rm(fname)
@@ -173,7 +172,7 @@ function PG.get_generation_data(
     variables[:pg] .+= Pg
 
     # Select single solar scenario
-    variables[:pS] = _get_solar_realization(problem, time_steps; kwargs)
+    variables[:pS] = _get_solar_realization(problem, time_steps; kwargs...)
     variables[:pW] =
         PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])[time_steps, :]
     variables[:pH] = DataFrames.DataFrame(Dict(:pH => total_hydro))
@@ -269,7 +268,7 @@ function _get_solar_forecast(
     time_steps;
     kwargs...
     ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
-    scenario = get(kwargs, :scenario, 1)
+    scenario = kwargs[:scenario]
 
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
@@ -309,7 +308,7 @@ function _get_solar_realization(
     time_steps;
     kwargs...
     ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
-    scenario = get(kwargs, :scenario, 1)
+    scenario = kwargs[:scenario]
 
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
@@ -336,7 +335,7 @@ function _get_save_path(
     save_dir;
     kwargs...
     ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
-    scenario = get(kwargs, :scenario, 1)
+    scenario = kwargs[:scenario]
     fname = joinpath(save_dir, "$title Scenario $scenario.$format")
     return fname
 end
