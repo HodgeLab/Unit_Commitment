@@ -3,7 +3,7 @@ function get_area_total_time_series(
     problem::PSI.OperationsProblem{T},
     type::DataType; 
     filter = nothing
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
@@ -34,7 +34,7 @@ function PSI.write_to_CSV(
     problem::PSI.OperationsProblem{T},
     output_path::String;
     time = nothing
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
     exclusions = [:λ, :β] # PWL chunks, expensive to export and useless
@@ -148,7 +148,7 @@ function _write_summary_stats(
     problem::PSI.OperationsProblem{T},
     output_path::String,
     solvetime::Union{Nothing, Float64}
-) where T <: BasecaseUnitCommitmentCC
+) where T <: Union{BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     optimization_container = PSI.get_optimization_container(problem)
     system = PSI.get_system(problem)
     time_steps = PSI.model_time_steps(optimization_container)

@@ -1,6 +1,6 @@
 function PG.plot_fuel(
     problem::PSI.OperationsProblem{T};
-    kwargs...) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    kwargs...) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     title = get(kwargs, :title, "Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
     scenario = kwargs[:scenario]
@@ -131,7 +131,7 @@ function PG.get_generation_data(
     solar_forecast,
     time_steps;
     kwargs...,
-) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC}
+) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     storage = problem.ext["use_storage"]
     use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
 
@@ -267,7 +267,7 @@ function _get_solar_forecast(
     problem::PSI.OperationsProblem{T},
     time_steps;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
 
     system = PSI.get_system(problem)
@@ -307,7 +307,7 @@ function _get_solar_realization(
     problem::PSI.OperationsProblem{T},
     time_steps;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
 
     optimization_container = PSI.get_optimization_container(problem)
@@ -334,7 +334,7 @@ function _get_save_path(
     format,
     save_dir;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC}
+    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
     fname = joinpath(save_dir, "$title Scenario $scenario.$format")
     return fname
