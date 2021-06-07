@@ -1,4 +1,4 @@
-# To run: julia --project CVaRUCProblem.jl true true true true true true 1000 0.25 0.80 Power
+# To run: julia --project CVaRUCProblem.jl 2018-05-17T00:00:00 true true true true true true 1000 0.25 0.80 Power
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -16,19 +16,21 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-# May 1st: under low tail in afternoon (Day 121)
-# June 20th: Low tail in morning (Day 171)
-initial_time = "2018-06-20T00:00:00"
-use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
-use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
-use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
-use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
-use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
-use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[7]) # Penalty cost of recourse reserve
-L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[8]) # 15 min response time, to start
-α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[9]) # Risk tolerance level
-formulation = isempty(ARGS) ? "Power" : ARGS[10]
+# April 15: Totally clear (Day 105)
+# May 14th: under low tail midday, in low tail in afternoon (Day 134)
+# June 13th: Low tail in morning (Day 164)
+# May 17th: Day 137 (low in afternoon, but still mostly in range)
+initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[1]
+use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[2])
+use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[3])
+use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[4])
+use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[5])
+use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[6])
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
+L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
+α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
+formulation = isempty(ARGS) ? "Power" : ARGS[11]
 scenarios = 31
 
 if formulation == "Power"
