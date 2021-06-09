@@ -1,4 +1,4 @@
-# To run: julia --project CVaRUCProblem.jl 2018-05-17T00:00:00 true true true true true true 1000 0.25 0.80 Power
+# To run: julia --project CVaRUCProblem.jl 2018-05-17T00:00:00 true true true true true true 1000 0.25 0.80
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -23,33 +23,22 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[1]
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[3])
-use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[4])
+use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
 L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
-formulation = isempty(ARGS) ? "Power" : ARGS[11]
 scenarios = 31
-
-if formulation == "Power"
-    custom_problem = CVaRPowerUnitCommitmentCC
-elseif formulation == "Reserve"
-    custom_problem = CVaRReserveUnitCommitmentCC
-else
-    throw(ArgumentError("Unrecognized formulation type. Given " * formulation))
-end
 
 optional_title =
     # (use_storage ? " stor" : "") *
     # (use_storage_reserves ? " storres" : "") *
-    # (use_reg ? " reg" : "") *
-    # (use_spin ? " spin" : "") *
-    # (!use_must_run ? " no must run" : "") *
+    # (use_solar_reserves ? " solres" : "") *
     " C_RR " * string(C_RR) * " alpha " * string(α)
 
-output_path = "./results/" * string(scenarios) * " scenarios/CVaR/" * formulation * "/" * split(initial_time, "T")[1] * optional_title * "/"
+output_path = "./results/" * string(scenarios) * " scenarios/CVaR/Reserve"  * "/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
@@ -89,7 +78,7 @@ set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitm
 # set_device_model!(template_ed, ThermalMultiStart, ThermalRampLimited)
 
 UC = OperationsProblem(
-    custom_problem,
+    CVaRReserveUnitCommitmentCC,
     template_dauc,
     system_da,
     optimizer = solver,
@@ -101,7 +90,8 @@ UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
-UC.ext["use_reg"] = use_reg
+UC.ext["use_solar_reserves"] = use_solar_reserves
+UC.ext["use_reg"] = true
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
 UC.ext["C_RR"] = C_RR
@@ -129,7 +119,7 @@ if status.value == 0
         plot_reserve(
                 UC,
                 "REG_UP";
-                use_solar_reserves = false,
+                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = scenario
             )
@@ -137,7 +127,7 @@ if status.value == 0
             plot_reserve(
                 UC,
                 "REG_DN";
-                use_solar_reserves = false,
+                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = scenario
             )
@@ -146,7 +136,7 @@ if status.value == 0
     plot_reserve(
         UC,
         "SPIN";
-        use_solar_reserves = false,
+        use_solar_reserves = use_solar_reserves,
         save_dir = output_path,
         scenario = nothing
     )

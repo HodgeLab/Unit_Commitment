@@ -32,13 +32,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
     resolution = PSI.model_resolution(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
-    # Deterministic solar forecast
-    total_solar = get_area_total_time_series(
-        problem,
-        RenewableGen;
-        filter = x -> get_prime_mover(x) == PrimeMovers.PVe && get_available(x),
-    )
-
     # Constants
     MINS_IN_HOUR = 60.0
     Δt = 1
@@ -123,18 +116,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
         (use_reg ? reg⁻_device_names : Vector{String}()),
     )
 
-    required_reg⁺ = get_time_series_values(
-        Deterministic,
-        reg_reserve_up,
-        "requirement";
-        start_time = case_initial_time,
-    )
-    required_reg⁻ = get_time_series_values(
-        Deterministic,
-        reg_reserve_dn,
-        "requirement";
-        start_time = case_initial_time,
-    )
     required_spin = get_time_series_values(
         Deterministic,
         spin_reserve,
@@ -151,6 +132,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
         RenewableGen;
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
+
+    # Begin with solar equations
+    apply_solar!(problem)
+    pS = jump_model.obj_dict[:pS]
 
     # -------------------------------------------------------------
     # Variables
@@ -177,7 +162,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
     )
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, t in time_steps] >= 0) # power ABOVE MINIMUM
     pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
-    pS = JuMP.@variable(jump_model, pS[t in time_steps] >= 0)
+
     if use_reg
         reg⁺ = JuMP.@variable(
             jump_model,
@@ -393,28 +378,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
     )
 
     if use_reg
-        # Eq (17) Total reg up
-        reg⁺_constraints = JuMP.@constraint(
-            jump_model,
-            [t in time_steps],
-            sum(
-                reg⁺[g, t] for g in (
-                    use_storage_reserves ? union(reg⁺_device_names, storage_names) :
-                    reg⁺_device_names
-                )
-            ) >= required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
+
+        apply_reg_requirements!(problem,
+            reg⁺_device_names,
+            reg⁻_device_names,
+            storage_names
         )
-        # Eq (18) Total reg down
-        reg⁻_constraints = JuMP.@constraint(
-            jump_model,
-            [t in time_steps],
-            sum(
-                reg⁻[g, t] for g in (
-                    use_storage_reserves ? union(reg⁻_device_names, storage_names) :
-                    reg⁻_device_names
-                )
-            ) >= required_reg⁻[t] - (use_slack ? slack_reg⁻[t] : 0)
-        )
+
         # Eq (20) Reg up response time
         reg⁺_response_constraints = JuMP.@constraint(
             jump_model,
@@ -447,13 +417,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
             spin[g, t] <= L_SPIN * ramp_up[g]
         )
     end
-
-    # Eq (23) Solar power
-    solar_constraints = JuMP.@constraint(
-        jump_model,
-        [t in time_steps],
-        pS[t] <= total_solar[t]
-    )
 
     # Eq (30) Power balance constraint, Eq (45) hydro included
     power_balance_constraint = JuMP.@constraint(

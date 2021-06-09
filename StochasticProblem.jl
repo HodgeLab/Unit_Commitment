@@ -23,7 +23,7 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[1]
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[2])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[3])
-use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[4])
+use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
@@ -31,7 +31,8 @@ scenarios = 31
 
 optional_title =
     (use_storage ? " stor" : "") *
-    (use_storage_reserves ? " storres" : "")
+    (use_storage_reserves ? " storres" : "") *
+    (use_solar_reserves ? " solres" : "")
 
 output_path = "./results/" * string(scenarios) * " scenarios/Stochastic/" *  "/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
@@ -85,7 +86,8 @@ UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
-UC.ext["use_reg"] = use_reg
+UC.ext["use_solar_reserves"] = use_solar_reserves
+UC.ext["use_reg"] = true
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
 UC.ext["C_res_penalty"] = 5000
@@ -106,5 +108,29 @@ if status.value == 0
             scenario = scenario,
             save_dir = output_path,
         )
+
+        plot_reserve(
+            UC,
+            "REG_UP";
+            use_solar_reserves = use_solar_reserves,
+            save_dir = output_path,
+            scenario = scenario
+        )
+
+        plot_reserve(
+            UC,
+            "REG_DN";
+            use_solar_reserves = use_solar_reserves,
+            save_dir = output_path,
+            scenario = scenario
+        )
     end
+
+    plot_reserve(
+        UC,
+        "SPIN";
+        use_solar_reserves = use_solar_reserves,
+        save_dir = output_path,
+        scenario = nothing
+    )
 end

@@ -37,18 +37,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     resolution = PSI.model_resolution(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
-    # Populate solar scenarios
-    area = PSY.get_component(Area, system, "1")
-    area_solar_forecast_scenarios = permutedims(
-        PSY.get_time_series_values(
-            Scenarios,
-            area,
-            "solar_power";
-            start_time = case_initial_time,
-        ) ./ 100,
-    )
-    scenarios = 1:size(area_solar_forecast_scenarios)[1]
-
     # Constants
     MINS_IN_HOUR = 60.0
     Δt = 1
@@ -137,18 +125,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
         (use_reg ? reg⁻_device_names : Vector{String}())
     )
 
-    required_reg⁺ = get_time_series_values(
-        Deterministic,
-        reg_reserve_up,
-        "requirement";
-        start_time = case_initial_time,
-    )
-    required_reg⁻ = get_time_series_values(
-        Deterministic,
-        reg_reserve_dn,
-        "requirement";
-        start_time = case_initial_time,
-    )
     required_spin = get_time_series_values(
         Deterministic,
         spin_reserve,
@@ -165,6 +141,11 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
         RenewableGen;
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
+
+    # Begin with solar equations
+    apply_solar!(problem)
+    pS = jump_model.obj_dict[:pS]
+    scenarios = 1:size(pS)[1]
 
     # -------------------------------------------------------------
     # Variables
@@ -191,27 +172,22 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     )
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, j in scenarios, t in time_steps] >= 0) # power ABOVE MINIMUM
     pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
-    pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
-    if use_reg
-        reg⁺_S = JuMP.@variable(jump_model, reg⁺_S[j in scenarios, t in time_steps] >= 0)
-        reg⁻_S = JuMP.@variable(jump_model, reg⁻_S[j in scenarios, t in time_steps] >= 0)
-        reg⁺ = JuMP.@variable(
-            jump_model,
-            reg⁺[
-                g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) :
-                      reg⁺_device_names),
-                t in time_steps,
-            ] >= 0
-        )
-        reg⁻ = JuMP.@variable(
-            jump_model,
-            reg⁻[
-                g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) :
-                      reg⁻_device_names),
-                t in time_steps,
-            ] >= 0
-        )
-    end
+    reg⁺ = JuMP.@variable(
+        jump_model,
+        reg⁺[
+            g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                    reg⁺_device_names),
+            t in time_steps,
+        ] >= 0
+    )
+    reg⁻ = JuMP.@variable(
+        jump_model,
+        reg⁻[
+            g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                    reg⁻_device_names),
+            t in time_steps,
+        ] >= 0
+    )
     if use_spin
         spin = JuMP.@variable(
             jump_model,
@@ -434,30 +410,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     optimization_container.expressions[:total_supp⁺] = total_supp⁺
     optimization_container.expressions[:total_supp⁻] = total_supp⁻
 
-    # Eq (17) Total reg up
-    reg⁺_constraints = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        sum(
-            reg⁺[g, t] for g in (
-                use_storage_reserves ? union(reg⁺_device_names, storage_names) :
-                reg⁺_device_names
-            )
-        ) + reg⁺_S[j, t]  >=
-        required_reg⁺[t] - total_supp⁺[j, t] - (use_slack ? slack_reg⁺[t] : 0)
-    )
-    # Eq (18) Total reg down
-    reg⁻_constraints = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        sum(
-            reg⁻[g, t] for g in (
-                use_storage_reserves ? union(reg⁻_device_names, storage_names) :
-                reg⁻_device_names
-            )
-        ) + reg⁻_S[j, t]  >=
-        required_reg⁻[t] - total_supp⁻[j, t] - (use_slack ? slack_reg⁻[t] : 0)
-    )
+    apply_reg_requirements!(problem,
+            reg⁺_device_names,
+            reg⁻_device_names,
+            storage_names
+        )
+
     # Eq (20) Reg up response time
     reg⁺_response_constraints = JuMP.@constraint(
         jump_model,
@@ -492,29 +450,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
         )
     end
 
-    # Eq (23) Solar scenarios
-    solar_constraints = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        pS[j, t] <= area_solar_forecast_scenarios[j, t]
-    )
-
-    # Solar reserve holding
-    if use_reg
-        solar_reserve_dn_constraint =
-        JuMP.@constraint(
-            jump_model,
-            [j in scenarios, t in time_steps],
-            reg⁻_S[j, t] <= pS[j, t]
-        )
-        solar_reserve_up_constraints =
-        JuMP.@constraint(
-            jump_model,
-            [j in scenarios, t in time_steps],
-            reg⁺_S[j, t] <=
-            area_solar_forecast_scenarios[j, t] - pS[j, t]
-        )
-    end
 
     # Eq (26) Auxiliary variable definition
     auxiliary_constraint = JuMP.@constraint(

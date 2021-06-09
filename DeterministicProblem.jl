@@ -19,7 +19,7 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
-use_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
+use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[6])
@@ -56,7 +56,8 @@ set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitm
 
 optional_title =
     (use_storage ? " stor" : "") *
-    (use_storage_reserves ? " storres" : "")
+    (use_storage_reserves ? " storres" : "") *
+    (use_solar_reserves ? " solres" : "")
 
 days_per_month = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 for month in 1:12
@@ -88,7 +89,8 @@ for month in 1:12
             JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
         UC.ext["use_storage"] = use_storage
         UC.ext["use_storage_reserves"] = use_storage_reserves
-        UC.ext["use_reg"] = use_reg
+        UC.ext["use_solar_reserves"] = use_solar_reserves
+        UC.ext["use_reg"] = true
         UC.ext["use_spin"] = use_spin
         UC.ext["use_must_run"] = use_must_run
         UC.ext["C_res_penalty"] = 5000
@@ -112,7 +114,7 @@ for month in 1:12
             plot_reserve(
                 UC,
                 "REG_UP";
-                use_solar_reserves = false,
+                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = nothing
             )
@@ -120,7 +122,7 @@ for month in 1:12
             plot_reserve(
                 UC,
                 "REG_DN";
-                use_solar_reserves = false,
+                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = nothing
             )
@@ -128,7 +130,7 @@ for month in 1:12
             plot_reserve(
                 UC,
                 "SPIN";
-                use_solar_reserves = false,
+                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = nothing
             )
