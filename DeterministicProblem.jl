@@ -106,6 +106,31 @@ for month in 1:12
             plot_fuel(
                 UC;
                 save_dir = output_path,
+                scenario = nothing
+            )
+
+            plot_reserve(
+                UC,
+                "REG_UP";
+                use_solar_reserves = false,
+                save_dir = output_path,
+                scenario = nothing
+            )
+
+            plot_reserve(
+                UC,
+                "REG_DN";
+                use_solar_reserves = false,
+                save_dir = output_path,
+                scenario = nothing
+            )
+
+            plot_reserve(
+                UC,
+                "SPIN";
+                use_solar_reserves = false,
+                save_dir = output_path,
+                scenario = nothing
             )
 
         end

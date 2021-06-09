@@ -125,5 +125,29 @@ if status.value == 0
             scenario = scenario,
             save_dir = output_path,
         )
+
+        plot_reserve(
+                UC,
+                "REG_UP";
+                use_solar_reserves = false,
+                save_dir = output_path,
+                scenario = scenario
+            )
+
+            plot_reserve(
+                UC,
+                "REG_DN";
+                use_solar_reserves = false,
+                save_dir = output_path,
+                scenario = scenario
+            )
     end
+
+    plot_reserve(
+        UC,
+        "SPIN";
+        use_solar_reserves = false,
+        save_dir = output_path,
+        scenario = nothing
+    )
 end
