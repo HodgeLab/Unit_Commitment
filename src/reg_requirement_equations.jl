@@ -6,13 +6,18 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
     ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
     use_solar_reserves = problem.ext["use_solar_reserves"]
 
+    system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     case_initial_time = PSI.get_initial_time(problem)
     obj_dict = jump_model.obj_dict
     use_supp = :total_supp⁺ in keys(obj_dict)
+    use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
+    reg_reserve_up = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "REG_UP")
+    reg_reserve_dn =
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
     required_reg⁺ = get_time_series_values(
         Deterministic,
         reg_reserve_up,
