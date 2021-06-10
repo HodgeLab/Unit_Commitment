@@ -419,14 +419,15 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     # Eq (20) Reg up response time
     reg⁺_response_constraints = JuMP.@constraint(
         jump_model,
-        [g in reg⁺_device_names, t in time_steps],
-        reg⁺[g, t] <= L_REG * ramp_up[g]
+        [g in reg⁺_device_names, j in scenarios, t in time_steps],
+        reg⁺[g, t] + supp⁺[g, j, t] <= L_REG * ramp_up[g]
     )
+
     # Eq (21) Reg down response time
     reg⁻_response_constraints = JuMP.@constraint(
         jump_model,
-        [g in reg⁻_device_names, t in time_steps],
-        reg⁻[g, t] <= L_REG * ramp_dn[g]
+        [g in reg⁻_device_names, j in scenarios, t in time_steps],
+        reg⁻[g, t] + supp⁻[g, j, t] <= L_REG * ramp_dn[g]
     )
 
     if use_spin
@@ -645,34 +646,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
                 JuMP.@constraint(jump_model, pg[g, j, t - 1] - pg[g, j, t] <= ramp_dn[g])
         end
     end
-
-    # Eq (35) Supp reserve response time
-    supp⁺_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in reg⁺_device_names, j in scenarios, t in time_steps],
-        supp⁺[g, j, t] <= L_SUPP * ramp_up[g]
-    )
-
-    # Eq (36) Supp reserve response time
-    supp⁻_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in reg⁻_device_names, j in scenarios, t in time_steps],
-        supp⁻[g, j, t] <= L_SUPP * ramp_dn[g]
-    )
-
-    # Eq (37) Linked up-reserve response times, spin category is mutually exclusive
-    # Reg and supp currently have same response time, but implementing anyway
-    linked_⁺_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in reg⁺_device_names, j in scenarios, t in time_steps],
-        L_SUPP / L_REG * reg⁺[g, t] + supp⁺[g, j, t] <= L_SUPP * ramp_up[g]
-    )
-
-    linked_⁻_response_constraints = JuMP.@constraint(
-        jump_model,
-        [g in reg⁻_device_names, j in scenarios, t in time_steps],
-        L_SUPP / L_REG * reg⁻[g, t] + supp⁻[g, j, t] <= L_SUPP * ramp_dn[g]
-    )
 
     # Apply CC constraints
     restrictions = problem.ext["cc_restrictions"]
