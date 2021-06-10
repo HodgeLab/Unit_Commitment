@@ -8,6 +8,7 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     system = PSI.get_system(problem)
+    case_initial_time = PSI.get_initial_time(problem)
 
     # Populate solar scenarios
     area = PSY.get_component(Area, system, "1")

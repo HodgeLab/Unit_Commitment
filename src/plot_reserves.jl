@@ -214,7 +214,19 @@ function _get_reserve_save_path(
     format,
     save_dir;
     kwargs...
-    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    scenario = kwargs[:scenario]
+    fname = joinpath(save_dir, "$title Scenario $scenario.$format")
+    return fname
+end
+
+function _get_reserve_save_path(
+    problem::PSI.OperationsProblem{T},
+    title,
+    format,
+    save_dir;
+    kwargs...
+    ) where T <: BasecaseUnitCommitmentCC
     fname = joinpath(save_dir, "$title.$format")
     return fname
 end
