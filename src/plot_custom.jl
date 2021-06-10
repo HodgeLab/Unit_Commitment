@@ -1,6 +1,6 @@
 function PG.plot_fuel(
     problem::PSI.OperationsProblem{T};
-    kwargs...) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+    kwargs...) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     title = get(kwargs, :title, "Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
     scenario = kwargs[:scenario]
@@ -56,9 +56,6 @@ function PG.plot_fuel(
     y_label = get(kwargs, :y_label, "Generation (GW)")
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
-    if :supp⁺ in keys(gen.data)
-        DataFrames.rename!(fuel_agg, Dict("Imports/Exports" => "Supp⁺"))
-    end
     p = plot_dataframe(
         fuel_agg,
         gen.time;
@@ -131,7 +128,7 @@ function PG.get_generation_data(
     solar_forecast,
     time_steps;
     kwargs...,
-) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     storage = problem.ext["use_storage"]
     use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
 
@@ -176,15 +173,6 @@ function PG.get_generation_data(
     variables[:pW] =
         PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])[time_steps, :]
     variables[:pH] = DataFrames.DataFrame(Dict(:pH => total_hydro))
-
-    if :supp⁺ in keys(jump_model.obj_dict)
-        # Supp is 3D transformed to 2D; select single scenario out
-        variables[:supp⁺] = _scenario_in_3D_array_to_dataframe(
-            jump_model.obj_dict[:supp⁺],
-            scenario,
-            time_steps
-        )
-    end
 
     variables[:curt] = DataFrames.DataFrame(
         :curt =>
@@ -251,10 +239,6 @@ function my_categorize_data(
     category_dataframes["Wind"] = data[:pW]
     category_dataframes["Hydropower"] = data[:pH]
     category_dataframes["PV"] = data[:pS]
-    if :supp⁺ in keys(data)
-        # Hack to match color, will be renamed
-        category_dataframes["Imports/Exports"] = data[:supp⁺]
-    end
     category_dataframes["Curtailment"] = data[:curt]
     if use_slack
         category_dataframes["Unserved Energy"] = data[:slack_energy⁺]
@@ -267,7 +251,7 @@ function _get_solar_forecast(
     problem::PSI.OperationsProblem{T},
     time_steps;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
 
     system = PSI.get_system(problem)
@@ -307,7 +291,7 @@ function _get_solar_realization(
     problem::PSI.OperationsProblem{T},
     time_steps;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
 
     optimization_container = PSI.get_optimization_container(problem)
@@ -334,7 +318,7 @@ function _get_save_path(
     format,
     save_dir;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
     fname = joinpath(save_dir, "$title Scenario $scenario.$format")
     return fname

@@ -13,7 +13,6 @@ const PSY = PowerSystems
 const PG = PowerGraphics
 
 include("manual_data_updates.jl")
-include("cvar_power_uc.jl")
 include("cvar_reserve_uc.jl")
 include("basecase_uc.jl")
 include("stochastic_uc.jl")

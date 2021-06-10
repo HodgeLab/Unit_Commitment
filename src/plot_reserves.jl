@@ -2,7 +2,7 @@ function plot_reserve(
     problem::PSI.OperationsProblem{T}, 
     reserve_name::String;
     use_solar_reserves = true,
-    kwargs...) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+    kwargs...) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     title = get(kwargs, :title, reserve_name)
     save_dir = get(kwargs, :save_dir, nothing)
     time_steps = get(kwargs, :time_steps, nothing)
@@ -125,7 +125,7 @@ function get_reserve_data(
     sym_dict::Dict,
     time_steps::UnitRange{Int64};
     kwargs...,
-) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
 
     system = PSI.get_system(problem)
@@ -214,7 +214,7 @@ function _get_reserve_save_path(
     format,
     save_dir;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
     fname = joinpath(save_dir, "$title.$format")
     return fname
 end
