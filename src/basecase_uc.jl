@@ -185,8 +185,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
         spin = JuMP.@variable(
             jump_model,
             spin[
-                g in (use_storage_reserves ? union(spin_device_names, storage_names) :
-                      spin_device_names),
+                g in spin_device_names,
                 t in time_steps,
             ] >= 0
         )
@@ -403,12 +402,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
         spin_constraints = JuMP.@constraint(
             jump_model,
             [t in time_steps],
-            sum(
-                spin[g, t] for g in (
-                    use_storage_reserves ? union(spin_device_names, storage_names) :
-                    spin_device_names
-                )
-            ) >= required_spin[t] - (use_slack ? slack_spin[t] : 0)
+            sum(spin[g, t] for g in spin_device_names) >=
+            required_spin[t] - (use_slack ? slack_spin[t] : 0)
         )
         # Eq (22) Spin response time
         spin_response_constraints = JuMP.@constraint(
