@@ -3,6 +3,7 @@ struct StochasticUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitmentCC};)
     use_storage = problem.ext["use_storage"]
     use_storage_reserves = problem.ext["use_storage_reserves"]
+    storage_reserve_names = problem.ext["storage_reserve_names"]
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]
@@ -169,7 +170,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         reg⁺ = JuMP.@variable(
             jump_model,
             reg⁺[
-                g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                g in (use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
                       reg⁺_device_names),
                 t in time_steps,
             ] >= 0
@@ -177,7 +178,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         reg⁻ = JuMP.@variable(
             jump_model,
             reg⁻[
-                g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                g in (use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
                       reg⁻_device_names),
                 t in time_steps,
             ] >= 0
@@ -207,7 +208,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     end
 
     if use_storage
-        apply_storage!(problem)
+        apply_storage!(problem, storage_reserve_names)
         pb_in = jump_model.obj_dict[:pb_in]
         pb_out = jump_model.obj_dict[:pb_out]
     end
@@ -383,7 +384,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         apply_reg_requirements!(problem,
             reg⁺_device_names,
             reg⁻_device_names,
-            storage_names
+            storage_reserve_names
         )
 
         # Eq (20) Reg up response time

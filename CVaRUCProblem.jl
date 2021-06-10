@@ -90,6 +90,7 @@ UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
+UC.ext["storage_reserve_names"] = ["EXPOSE_STORAGE"]
 UC.ext["use_solar_reserves"] = use_solar_reserves
 UC.ext["use_reg"] = true
 UC.ext["use_spin"] = use_spin

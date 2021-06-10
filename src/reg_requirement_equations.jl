@@ -2,7 +2,7 @@
 function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
     reg⁺_device_names::Vector{String},
     reg⁻_device_names::Vector{String},
-    storage_names::Vector{String}
+    storage_reserve_names::Vector{String}
     ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
     use_solar_reserves = problem.ext["use_solar_reserves"]
 
@@ -47,7 +47,7 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [t in time_steps],
             sum(
                 reg⁺[g, t] for g in (
-                    use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                    use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
                     reg⁺_device_names
                 )
             ) + (use_solar_reserves ? reg⁺_S[t] : 0) >=
@@ -59,7 +59,7 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [t in time_steps],
             sum(
                 reg⁻[g, t] for g in (
-                    use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                    use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
                     reg⁻_device_names
                 )
             ) + (use_solar_reserves ? reg⁻_S[t] : 0) >= 
@@ -72,7 +72,7 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [j in scenarios, t in time_steps],
             sum(
                 reg⁺[g, t] for g in (
-                    use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                    use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
                     reg⁺_device_names
                 )
             ) + (use_solar_reserves ? reg⁺_S[j, t] : 0)  >=
@@ -84,7 +84,7 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [j in scenarios, t in time_steps],
             sum(
                 reg⁻[g, t] for g in (
-                    use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                    use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
                     reg⁻_device_names
                 )
             ) + (use_solar_reserves ? reg⁻_S[j, t] : 0) >=

@@ -1,5 +1,7 @@
 
-function apply_storage!(problem)
+function apply_storage!(problem::PSI.OperationsProblem{T},
+    storage_reserve_names::Vector{String}
+    ) where T
     use_storage_reserves = problem.ext["use_storage_reserves"]
     use_reg = problem.ext["use_reg"]
     L_REG = problem.ext["L_REG"]
@@ -98,14 +100,14 @@ function apply_storage!(problem)
         # Storage energy satisfies reserve deployment period
         storage_⁺_response_constraints = JuMP.@constraint(
             jump_model,
-            [b in storage_names, t in time_steps],
+            [b in storage_reserve_names, t in time_steps],
             η[b].out * (eb[b, t] - eb_lim[b].min) >=
             (use_reg ? L_REG * reg⁺[b, t] : 0)
         )
         if use_reg
             storage_⁻_response_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, t in time_steps],
+                [b in storage_reserve_names, t in time_steps],
                 (1 / η[b].in) * (eb_lim[b].max - eb[b, t]) >= L_REG * reg⁻[b, t]
             )
         end
@@ -113,14 +115,14 @@ function apply_storage!(problem)
         # Power limits on reserves storage can provide
         storage_⁺_reserve_constraints = JuMP.@constraint(
             jump_model,
-            [b in storage_names, t in time_steps],
+            [b in storage_reserve_names, t in time_steps],
             (use_reg ? reg⁺[b, t] : 0) <=
             pb_out_max[b] - pb_out[b, t] + pb_in[b, t]
         )
         if use_reg
             storage_⁻_reserve_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, t in time_steps],
+                [b in storage_reserve_names, t in time_steps],
                 reg⁻[b, t] <= pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
             )
         end
