@@ -1,4 +1,5 @@
-# To run: julia --project CVaRUCProblem.jl 2018-05-17T00:00:00 true true true true true true 1000 0.25 0.80
+# To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true 1000 0.80
+# D for deterministic, S for stochastic, C for CVaR
 
 include("src/Unit_commitment.jl")
 using PowerSimulations
@@ -20,25 +21,38 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # May 14th: under low tail midday, in low tail in afternoon (Day 134)
 # June 13th: Low tail in morning (Day 164)
 # May 17th: Day 137 (low in afternoon, but still mostly in range)
-initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[1]
-use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[2])
-use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[3])
-use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
-use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[5])
-use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[7])
-C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[8]) # Penalty cost of recourse reserve
-L_SUPP = isempty(ARGS) ? 1 / 4 : parse(Float64, ARGS[9]) # 15 min response time, to start
+formulation = isempty(ARGS) ? "D" : ARGS[1]
+initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[2]
+use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[3])
+use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
+use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[5])
+use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
+use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
 scenarios = 31
 
-optional_title =
-    # (use_storage ? " stor" : "") *
-    # (use_storage_reserves ? " storres" : "") *
-    # (use_solar_reserves ? " solres" : "") *
-    " C_RR " * string(C_RR) * " alpha " * string(α)
+if formulation == "D"
+    formulation_dir = "Deterministic"
+    custom_problem = BasecaseUnitCommitmentCC
+elseif formulation == "C"
+    formulation_dir = "CVAR"
+    custom_problem = CVaRReserveUnitCommitmentCC
+elseif formulation == "S"
+    formulation_dir = "Stochastic"
+    custom_problem = StochasticUnitCommitmentCC
+else throw(ArgumentError("Formulation key unrecognized"))
+end
 
-output_path = "./results/" * string(scenarios) * " scenarios/CVaR/Reserve"  * "/" * split(initial_time, "T")[1] * optional_title * "/"
+optional_title =
+    (use_storage ? " stor" : "") *
+    (use_storage_reserves ? " storres" : "") *
+    (use_solar_reserves ? " solres" : "") *
+    (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "")
+
+output_path = "./results/" * string(scenarios) * " scenarios/" * formulation_dir * 
+    "/" * split(initial_time, "T")[1] * optional_title * "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
@@ -52,18 +66,13 @@ system_da = System(
     joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
     time_series_read_only = true,
 )
-# system_ha = System("data/HA_sys.json"; time_series_read_only = true)
-# system_ed = System("data/RT_sys.json"; time_series_read_only = true)
 
-# Jose's tune-ups for the HA UC
-for system in [system_da] # [system_da, system_ha, system_ed]
+for system in [system_da]
     apply_manual_data_updates!(system, use_nuclear)
 end
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
-# template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
-# template_ed = OperationsProblemTemplate(CopperPlatePowerModel)
-for template in [template_dauc] # [template_dauc, template_hauc, template_ed]
+for template in [template_dauc]
     set_device_model!(template, RenewableDispatch, RenewableFullDispatch)
     set_device_model!(template, PowerLoad, StaticPowerLoad)
     # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
@@ -74,11 +83,9 @@ for template in [template_dauc] # [template_dauc, template_hauc, template_ed]
 end
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
-# ignore HA for now
-# set_device_model!(template_ed, ThermalMultiStart, ThermalRampLimited)
 
 UC = OperationsProblem(
-    CVaRReserveUnitCommitmentCC,
+    custom_problem,
     template_dauc,
     system_da,
     optimizer = solver,
@@ -96,7 +103,6 @@ UC.ext["use_reg"] = true
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
 UC.ext["C_RR"] = C_RR
-UC.ext["L_SUPP"] = L_SUPP
 UC.ext["α"] = α
 UC.ext["C_res_penalty"] = 5000
 UC.ext["C_ener_penalty"] = 100000
@@ -110,10 +116,10 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 if status.value == 0
     write_to_CSV(UC, output_path; time=solvetime)
 
-    for scenario in 1:scenarios
+    for scenario in 1:(formulation == "D" ? 1 : scenarios)
         plot_fuel(
             UC;
-            scenario = scenario,
+            scenario = (formulation == "D" ? nothing : scenario),
             save_dir = output_path,
         )
 
@@ -122,7 +128,7 @@ if status.value == 0
                 "REG_UP";
                 use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
-                scenario = scenario
+                scenario = (formulation == "D" ? nothing : scenario)
             )
 
             plot_reserve(
@@ -130,7 +136,7 @@ if status.value == 0
                 "REG_DN";
                 use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
-                scenario = scenario
+                scenario = (formulation == "D" ? nothing : scenario)
             )
     end
 

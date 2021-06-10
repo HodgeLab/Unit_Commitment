@@ -85,7 +85,6 @@ function _write_summary_stats(
 
     output = Dict(
         "Solve time (s)" => solvetime,
-        "L_SUPP" => problem.ext["L_SUPP"],
         "C_RR" => C_RR,
         "C_res_penalty" => C_res_penalty,
         "C_ener_penalty" => C_ener_penalty,

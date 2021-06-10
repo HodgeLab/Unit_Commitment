@@ -41,7 +41,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     # Constants
     MINS_IN_HOUR = 60.0
     Δt = 1
-    L_SUPP = L_REG
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
