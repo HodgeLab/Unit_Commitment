@@ -24,8 +24,18 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
 
     pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
     if use_reg && use_solar_reserves
+        required_reg⁻ = get_time_series_values(
+            Deterministic,
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN"),
+            "requirement";
+            start_time = case_initial_time,
+        )
+
         reg⁺_S = JuMP.@variable(jump_model, reg⁺_S[j in scenarios, t in time_steps] >= 0)
-        reg⁻_S = JuMP.@variable(jump_model, reg⁻_S[j in scenarios, t in time_steps] >= 0)
+        reg⁻_S = JuMP.@variable(
+            jump_model,
+            0 <= reg⁻_S[j in scenarios, t in time_steps] <= required_reg⁻[t]
+        )
     end
 
     # Eq (23) Solar scenarios
@@ -64,11 +74,22 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     system = PSI.get_system(problem)
+    case_initial_time = PSI.get_initial_time(problem)
 
     pS = JuMP.@variable(jump_model, pS[t in time_steps] >= 0)
     if use_reg && use_solar_reserves
+        required_reg⁻ = get_time_series_values(
+            Deterministic,
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN"),
+            "requirement";
+            start_time = case_initial_time,
+        )
+
         reg⁺_S = JuMP.@variable(jump_model, reg⁺_S[t in time_steps] >= 0)
-        reg⁻_S = JuMP.@variable(jump_model, reg⁻_S[t in time_steps] >= 0)
+        reg⁻_S = JuMP.@variable(
+            jump_model,
+            0 <= reg⁻_S[t in time_steps] <= required_reg⁻[t]
+            )
     end
 
     # Deterministic solar forecast
