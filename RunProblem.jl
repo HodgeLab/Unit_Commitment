@@ -67,20 +67,16 @@ system_da = System(
     time_series_read_only = true,
 )
 
-for system in [system_da]
-    apply_manual_data_updates!(system, use_nuclear)
-end
+apply_manual_data_updates!(system_da, use_nuclear, system_file_path)
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
-for template in [template_dauc]
-    set_device_model!(template, RenewableDispatch, RenewableFullDispatch)
-    set_device_model!(template, PowerLoad, StaticPowerLoad)
-    # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
-    set_device_model!(template, HydroDispatch, FixedOutput)
-    set_service_model!(template, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
-    set_service_model!(template, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
-    set_device_model!(template, GenericBattery, BookKeepingwReservation)
-end
+set_device_model!(template_dauc, RenewableDispatch, RenewableFullDispatch)
+set_device_model!(template_dauc, PowerLoad, StaticPowerLoad)
+# Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
+set_device_model!(template_dauc, HydroDispatch, FixedOutput)
+set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
+set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
+set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
 
