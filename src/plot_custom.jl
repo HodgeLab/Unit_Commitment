@@ -48,9 +48,9 @@ function PG.plot_fuel(
         storage
     )
 
-    # Hack to make nuclear on the bottom and curtailment on top
+    # Hack to make nuclear on the bottom
     cat_names = intersect(PG.CATEGORY_DEFAULT, keys(fuel))
-    cat_names = [cat_names[2], cat_names[1], cat_names[3:end-2]..., cat_names[end], cat_names[end-1]]
+    cat_names = [cat_names[2], cat_names[1], cat_names[3:end]..., ]
     fuel_agg = PG.combine_categories(fuel; names = cat_names)
 
     y_label = get(kwargs, :y_label, "Generation (GW)")
