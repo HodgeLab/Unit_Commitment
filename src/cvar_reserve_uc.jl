@@ -134,7 +134,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
-    total_load = get_area_total_time_series(problem, PowerLoad).*1.15
+    total_load = get_area_total_time_series(problem, PowerLoad) .* problem.ext["load_scale"]
     total_hydro = get_area_total_time_series(problem, HydroGen)
     total_wind = get_area_total_time_series(
         problem,

@@ -98,6 +98,9 @@ for month in 1:12
         UC.ext["C_ener_penalty"] = 100000
         UC.ext["L_REG"] = 1 / 12 # 5 min
         UC.ext["L_SPIN"] = 1 / 6 # 10 min
+        UC.ext["load_scale"] = 1.15
+        UC.ext["solar_scale"] = 1
+        UC.ext["storage_scale"] = 15
 
         # Build and solve the standalone problem
         build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug

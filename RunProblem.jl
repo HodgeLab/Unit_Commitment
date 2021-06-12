@@ -105,6 +105,9 @@ UC.ext["C_res_penalty"] = 5000
 UC.ext["C_ener_penalty"] = 100000
 UC.ext["L_REG"] = 1 / 12 # 5 min
 UC.ext["L_SPIN"] = 1 / 6 # 10 min
+UC.ext["load_scale"] = 1.15
+UC.ext["solar_scale"] = 1
+UC.ext["storage_scale"] = 15
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
@@ -117,6 +120,16 @@ if status.value == 0
         output_path;
         time=solvetime
     )
+
+    ha_file = joinpath(system_file_path, "HA_sys.json")
+    if isfile(ha_file)
+        system_ha = System(ha_file; time_series_read_only = true)
+        write_missing_power(
+            problem,
+            system_ha,
+            data_path,
+            output_path)
+    end
 
     for scenario in 1:(formulation == "D" ? 1 : scenarios)
         plot_fuel(

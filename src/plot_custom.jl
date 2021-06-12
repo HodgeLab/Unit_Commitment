@@ -19,7 +19,7 @@ function PG.plot_fuel(
     use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
     storage = problem.ext["use_storage"]
 
-    total_load = get_area_total_time_series(problem, PowerLoad)[time_steps].*1.15
+    total_load = get_area_total_time_series(problem, PowerLoad)[time_steps] .* problem.ext["load_scale"]
     total_hydro = get_area_total_time_series(problem, HydroGen)[time_steps]
     total_wind = get_area_total_time_series(
         problem,
@@ -239,6 +239,7 @@ function _get_solar_forecast(
     kwargs...
     ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
+    solar_scale = problem.ext["solar_scale"]
 
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
@@ -250,7 +251,7 @@ function _get_solar_forecast(
             area,
             "solar_power";
             start_time = case_initial_time,
-        ) ./ 100,
+        ) .* solar_scale ./ 100,
     )[
         scenario,
         time_steps,
@@ -263,12 +264,13 @@ function _get_solar_forecast(
     time_steps;
     kwargs...
     ) where T <: BasecaseUnitCommitmentCC
+    solar_scale = problem.ext["solar_scale"]
 
     forecast = get_area_total_time_series(
             problem,
             RenewableGen;
             filter = x -> get_prime_mover(x) == PrimeMovers.PVe && get_available(x),
-        )[time_steps]
+        )[time_steps] .* solar_scale
 
     return forecast
 end

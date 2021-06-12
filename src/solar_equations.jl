@@ -3,6 +3,7 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     use_solar_reserves = problem.ext["use_solar_reserves"]
     use_reg = problem.ext["use_reg"]
+    solar_scale = problem.ext["solar_scale"]
 
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)
@@ -18,7 +19,7 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
             area,
             "solar_power";
             start_time = case_initial_time,
-        ) ./ 100,
+        ) .* solar_scale ./ 100,
     )
     scenarios = 1:size(area_solar_forecast_scenarios)[1]
 
@@ -69,6 +70,7 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     ) where T <: BasecaseUnitCommitmentCC
     use_solar_reserves = problem.ext["use_solar_reserves"]
     use_reg = problem.ext["use_reg"]
+    solar_scale = problem.ext["solar_scale"]
 
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)
@@ -97,7 +99,7 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
         problem,
         RenewableGen;
         filter = x -> get_prime_mover(x) == PrimeMovers.PVe && get_available(x),
-    )
+    ) .* solar_scale
 
     # Eq (23) Solar power
     solar_constraints = JuMP.@constraint(

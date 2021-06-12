@@ -273,7 +273,7 @@ function _write_missing_power(
     time_steps = PSI.model_time_steps(optimization_container)
     case_initial_time = PSI.get_initial_time(problem)
 
-    total_load = get_area_total_time_series(problem, PowerLoad).*1.15
+    total_load = get_area_total_time_series(problem, PowerLoad) .* problem.ext["load_scale"]
     total_hydro = get_area_total_time_series(problem, HydroGen)
     pW = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])
 

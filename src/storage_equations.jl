@@ -14,10 +14,9 @@ function apply_storage!(problem::PSI.OperationsProblem{T},
     storage_names = PSY.get_name.(get_components(PSY.GenericBattery, system))
 
     # Battery parameters
-    # INCLUDE HACKS TO INCREASE CAPACITY WHILE JOSE ADJUSTS THINGS
     fake_get_SOC = function(b)
-        min = get_state_of_charge_limits(b)[:min]*15
-        max = get_state_of_charge_limits(b)[:max]*15
+        min = get_state_of_charge_limits(b)[:min] * problem.ext["storage_scale"]
+        max = get_state_of_charge_limits(b)[:max] * problem.ext["storage_scale"]
         return (min = min, max = max)
     end
     eb_lim = Dict(
@@ -35,12 +34,14 @@ function apply_storage!(problem::PSI.OperationsProblem{T},
     )
     pb_in_max = Dict(
         b =>
-            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max]*15
+            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max] *
+            problem.ext["storage_scale"]
         for b in storage_names
     )
     pb_out_max = Dict(
         b =>
-            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]*15
+            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max] *
+            problem.ext["storage_scale"]
         for b in storage_names
     )
 
