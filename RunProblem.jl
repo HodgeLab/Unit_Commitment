@@ -6,6 +6,7 @@ using PowerSimulations
 using PowerSystems
 using Dates
 using CSV
+using HDF5
 using DataFrames
 using PowerGraphics
 plotlyjs()
@@ -110,7 +111,12 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 (status, solvetime) = @timed solve!(UC)
 
 if status.value == 0
-    write_to_CSV(UC, output_path; time=solvetime)
+    write_to_CSV(
+        UC,
+        system_file_path,
+        output_path;
+        time=solvetime
+    )
 
     for scenario in 1:(formulation == "D" ? 1 : scenarios)
         plot_fuel(

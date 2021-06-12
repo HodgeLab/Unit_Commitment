@@ -5,6 +5,7 @@ using PowerSimulations
 using PowerSystems
 using Dates
 using CSV
+using HDF5
 using DataFrames
 using PowerGraphics
 plotlyjs()
@@ -103,7 +104,12 @@ for month in 1:12
         (status, solvetime) = @timed solve!(UC)
 
         if status.value == 0
-            write_to_CSV(UC, output_path; time=solvetime)
+            write_to_CSV(
+                UC,
+                system_file_path,
+                output_path;
+                time=solvetime
+            )
 
             plot_fuel(
                 UC;

@@ -148,25 +148,11 @@ function PG.get_generation_data(
         variables[v] = PSI.axis_array_to_dataframe(jump_model.obj_dict[v], [v])[time_steps, :]
     end
 
-    # Get power above min
-    pg = jump_model.obj_dict[:pg]
-    if length(size(pg)) == 2
-        variables[:pg] = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pg], [:pg])[time_steps, :]
-    elseif length(size(pg)) == 3
-        variables[:pg] = _scenario_in_3D_array_to_dataframe(
-            pg,
-            scenario,
-            time_steps)
-    else
-        throw(ErrorException("Only have plot methods for pg of 2 or 3 dimensions"))
-    end
-    # Add the min level
-    Pg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[time_steps, :]
-    for n in names(Pg)
-        Pg[!, n] .*=
-            get_active_power_limits(get_component(ThermalMultiStart, system, n)).min
-    end
-    variables[:pg] .+= Pg
+    variables[:pg] = get_thermal_generator_power_dataframe(
+        problem,
+        time_steps,
+        scenario
+    )
 
     # Select single solar scenario
     variables[:pS] = _get_solar_realization(problem, time_steps; kwargs...)
