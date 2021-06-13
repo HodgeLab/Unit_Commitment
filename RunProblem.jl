@@ -127,7 +127,7 @@ if status.value == 0
         write_missing_power(
             problem,
             system_ha,
-            data_path,
+            system_file_path,
             output_path)
     end
 
