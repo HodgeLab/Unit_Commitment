@@ -1,10 +1,10 @@
 
-function apply_storage!(problem)
+function apply_storage!(problem::PSI.OperationsProblem{T},
+    storage_reserve_names::Vector{String}
+    ) where T
     use_storage_reserves = problem.ext["use_storage_reserves"]
     use_reg = problem.ext["use_reg"]
-    use_spin = problem.ext["use_spin"]
     L_REG = problem.ext["L_REG"]
-    L_SPIN = problem.ext["L_SPIN"]
 
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)
@@ -14,10 +14,9 @@ function apply_storage!(problem)
     storage_names = PSY.get_name.(get_components(PSY.GenericBattery, system))
 
     # Battery parameters
-    # INCLUDE HACKS TO INCREASE CAPACITY WHILE JOSE ADJUSTS THINGS
     fake_get_SOC = function(b)
-        min = get_state_of_charge_limits(b)[:min]*15
-        max = get_state_of_charge_limits(b)[:max]*15
+        min = get_state_of_charge_limits(b)[:min] * problem.ext["storage_scale"]
+        max = get_state_of_charge_limits(b)[:max] * problem.ext["storage_scale"]
         return (min = min, max = max)
     end
     eb_lim = Dict(
@@ -35,12 +34,14 @@ function apply_storage!(problem)
     )
     pb_in_max = Dict(
         b =>
-            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max]*15
+            get_input_active_power_limits(get_component(GenericBattery, system, b))[:max] *
+            problem.ext["storage_scale"]
         for b in storage_names
     )
     pb_out_max = Dict(
         b =>
-            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max]*15
+            get_output_active_power_limits(get_component(GenericBattery, system, b))[:max] *
+            problem.ext["storage_scale"]
         for b in storage_names
     )
 
@@ -62,7 +63,6 @@ function apply_storage!(problem)
     # Get pre-registered Variables
     reg⁺ = jump_model.obj_dict[:reg⁺]
     reg⁻ = jump_model.obj_dict[:reg⁻]
-    spin = jump_model.obj_dict[:spin]
 
     # Storage charge/discharge decisions
     storage_charge_constraints = JuMP.@constraint(
@@ -101,14 +101,14 @@ function apply_storage!(problem)
         # Storage energy satisfies reserve deployment period
         storage_⁺_response_constraints = JuMP.@constraint(
             jump_model,
-            [b in storage_names, t in time_steps],
+            [b in storage_reserve_names, t in time_steps],
             η[b].out * (eb[b, t] - eb_lim[b].min) >=
-            (use_reg ? L_REG * reg⁺[b, t] : 0) + (use_spin ? L_SPIN * spin[b, t] : 0)
+            (use_reg ? L_REG * reg⁺[b, t] : 0)
         )
         if use_reg
             storage_⁻_response_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, t in time_steps],
+                [b in storage_reserve_names, t in time_steps],
                 (1 / η[b].in) * (eb_lim[b].max - eb[b, t]) >= L_REG * reg⁻[b, t]
             )
         end
@@ -116,14 +116,14 @@ function apply_storage!(problem)
         # Power limits on reserves storage can provide
         storage_⁺_reserve_constraints = JuMP.@constraint(
             jump_model,
-            [b in storage_names, t in time_steps],
-            (use_reg ? reg⁺[b, t] : 0) + (use_spin ? spin[b, t] : 0) <=
+            [b in storage_reserve_names, t in time_steps],
+            (use_reg ? reg⁺[b, t] : 0) <=
             pb_out_max[b] - pb_out[b, t] + pb_in[b, t]
         )
         if use_reg
             storage_⁻_reserve_constraints = JuMP.@constraint(
                 jump_model,
-                [b in storage_names, t in time_steps],
+                [b in storage_reserve_names, t in time_steps],
                 reg⁻[b, t] <= pb_in_max[b] - pb_in[b, t] + pb_out[b, t]
             )
         end

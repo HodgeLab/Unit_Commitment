@@ -1,4 +1,4 @@
-function apply_manual_data_updates!(system, use_nuclear)
+function apply_manual_data_updates!(system, use_nuclear, system_file_path)
     for g in get_components(
         RenewableDispatch,
         system,
@@ -33,7 +33,18 @@ function apply_manual_data_updates!(system, use_nuclear)
         end
     end
 
-    # g = get_component(ThermalMultiStart, system, "SANDY_CREEK_J04")
-    # set_status!(g, false)
-    # set_active_power!(g, 0.0)
+    # Overwrite with selected inital on conditions, from running 5/17/2018
+    initial_on = CSV.read(joinpath(system_file_path, "initial_on.csv"), DataFrame)
+    for g in get_components(
+        ThermalMultiStart,
+        system
+    )
+        new_on = Bool(initial_on[1, get_name(g)])
+        set_status!(g, new_on)
+        if !new_on
+            set_active_power!(g, 0.0)
+        else
+            set_active_power!(g, (get_active_power_limits(g).max-10^(-10))/get_base_power(g)*get_base_power(system))
+        end
+    end
 end

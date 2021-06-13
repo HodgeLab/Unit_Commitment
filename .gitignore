@@ -10,7 +10,9 @@ _*.jl
 generated*.md
 
 # Test data
-data
+data/*
+!data/initial_on.csv
+
 # Simulation Results
 results
 plots

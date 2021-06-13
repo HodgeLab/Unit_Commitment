@@ -1,6 +1,6 @@
 function PG.plot_fuel(
     problem::PSI.OperationsProblem{T};
-    kwargs...) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+    kwargs...) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     title = get(kwargs, :title, "Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
     scenario = kwargs[:scenario]
@@ -19,7 +19,7 @@ function PG.plot_fuel(
     use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
     storage = problem.ext["use_storage"]
 
-    total_load = get_area_total_time_series(problem, PowerLoad)[time_steps].*1.15
+    total_load = get_area_total_time_series(problem, PowerLoad)[time_steps] .* problem.ext["load_scale"]
     total_hydro = get_area_total_time_series(problem, HydroGen)[time_steps]
     total_wind = get_area_total_time_series(
         problem,
@@ -48,17 +48,14 @@ function PG.plot_fuel(
         storage
     )
 
-    # Hack to make nuclear on the bottom and curtailment on top
+    # Hack to make nuclear on the bottom
     cat_names = intersect(PG.CATEGORY_DEFAULT, keys(fuel))
-    cat_names = [cat_names[2], cat_names[1], cat_names[3:end-2]..., cat_names[end], cat_names[end-1]]
+    cat_names = [cat_names[2], cat_names[1], cat_names[3:end]..., ]
     fuel_agg = PG.combine_categories(fuel; names = cat_names)
 
     y_label = get(kwargs, :y_label, "Generation (GW)")
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
-    if :supp⁺ in keys(gen.data)
-        DataFrames.rename!(fuel_agg, Dict("Imports/Exports" => "Supp⁺"))
-    end
     p = plot_dataframe(
         fuel_agg,
         gen.time;
@@ -131,7 +128,7 @@ function PG.get_generation_data(
     solar_forecast,
     time_steps;
     kwargs...,
-) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     storage = problem.ext["use_storage"]
     use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
 
@@ -151,40 +148,17 @@ function PG.get_generation_data(
         variables[v] = PSI.axis_array_to_dataframe(jump_model.obj_dict[v], [v])[time_steps, :]
     end
 
-    # Get power above min
-    pg = jump_model.obj_dict[:pg]
-    if length(size(pg)) == 2
-        variables[:pg] = PSI.axis_array_to_dataframe(jump_model.obj_dict[:pg], [:pg])[time_steps, :]
-    elseif length(size(pg)) == 3
-        variables[:pg] = _scenario_in_3D_array_to_dataframe(
-            pg,
-            scenario,
-            time_steps)
-    else
-        throw(ErrorException("Only have plot methods for pg of 2 or 3 dimensions"))
-    end
-    # Add the min level
-    Pg = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[time_steps, :]
-    for n in names(Pg)
-        Pg[!, n] .*=
-            get_active_power_limits(get_component(ThermalMultiStart, system, n)).min
-    end
-    variables[:pg] .+= Pg
+    variables[:pg] = get_thermal_generator_power_dataframe(
+        problem,
+        time_steps,
+        scenario
+    )
 
     # Select single solar scenario
     variables[:pS] = _get_solar_realization(problem, time_steps; kwargs...)
     variables[:pW] =
         PSI.axis_array_to_dataframe(jump_model.obj_dict[:pW], [:pW])[time_steps, :]
     variables[:pH] = DataFrames.DataFrame(Dict(:pH => total_hydro))
-
-    if :supp⁺ in keys(jump_model.obj_dict)
-        # Supp is 3D transformed to 2D; select single scenario out
-        variables[:supp⁺] = _scenario_in_3D_array_to_dataframe(
-            jump_model.obj_dict[:supp⁺],
-            scenario,
-            time_steps
-        )
-    end
 
     variables[:curt] = DataFrames.DataFrame(
         :curt =>
@@ -251,10 +225,6 @@ function my_categorize_data(
     category_dataframes["Wind"] = data[:pW]
     category_dataframes["Hydropower"] = data[:pH]
     category_dataframes["PV"] = data[:pS]
-    if :supp⁺ in keys(data)
-        # Hack to match color, will be renamed
-        category_dataframes["Imports/Exports"] = data[:supp⁺]
-    end
     category_dataframes["Curtailment"] = data[:curt]
     if use_slack
         category_dataframes["Unserved Energy"] = data[:slack_energy⁺]
@@ -267,8 +237,9 @@ function _get_solar_forecast(
     problem::PSI.OperationsProblem{T},
     time_steps;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
+    solar_scale = problem.ext["solar_scale"]
 
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
@@ -280,7 +251,7 @@ function _get_solar_forecast(
             area,
             "solar_power";
             start_time = case_initial_time,
-        ) ./ 100,
+        ) .* solar_scale ./ 100,
     )[
         scenario,
         time_steps,
@@ -293,12 +264,13 @@ function _get_solar_forecast(
     time_steps;
     kwargs...
     ) where T <: BasecaseUnitCommitmentCC
+    solar_scale = problem.ext["solar_scale"]
 
     forecast = get_area_total_time_series(
             problem,
             RenewableGen;
             filter = x -> get_prime_mover(x) == PrimeMovers.PVe && get_available(x),
-        )[time_steps]
+        )[time_steps] .* solar_scale
 
     return forecast
 end
@@ -307,7 +279,7 @@ function _get_solar_realization(
     problem::PSI.OperationsProblem{T},
     time_steps;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
 
     optimization_container = PSI.get_optimization_container(problem)
@@ -334,7 +306,7 @@ function _get_save_path(
     format,
     save_dir;
     kwargs...
-    ) where T <: Union{CVaRPowerUnitCommitmentCC, CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
     scenario = kwargs[:scenario]
     fname = joinpath(save_dir, "$title Scenario $scenario.$format")
     return fname

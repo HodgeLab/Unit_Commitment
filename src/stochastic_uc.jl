@@ -3,6 +3,7 @@ struct StochasticUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitmentCC};)
     use_storage = problem.ext["use_storage"]
     use_storage_reserves = problem.ext["use_storage_reserves"]
+    storage_reserve_names = problem.ext["storage_reserve_names"]
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]
@@ -31,18 +32,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     jump_model = PSI.get_jump_model(optimization_container)
     resolution = PSI.model_resolution(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
-
-    # Populate solar scenarios
-    area = PSY.get_component(Area, system, "1")
-    area_solar_forecast_scenarios = permutedims(
-        PSY.get_time_series_values(
-            Scenarios,
-            area,
-            "solar_power";
-            start_time = case_initial_time,
-        ) ./ 100,
-    )
-    scenarios = 1:size(area_solar_forecast_scenarios)[1]
 
     # Constants
     MINS_IN_HOUR = 60.0
@@ -130,18 +119,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         (use_reg ? reg⁻_device_names : Vector{String}())
     )
 
-    required_reg⁺ = get_time_series_values(
-        Deterministic,
-        reg_reserve_up,
-        "requirement";
-        start_time = case_initial_time,
-    )
-    required_reg⁻ = get_time_series_values(
-        Deterministic,
-        reg_reserve_dn,
-        "requirement";
-        start_time = case_initial_time,
-    )
     required_spin = get_time_series_values(
         Deterministic,
         spin_reserve,
@@ -151,13 +128,18 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
-    total_load = get_area_total_time_series(problem, PowerLoad).*1.15
+    total_load = get_area_total_time_series(problem, PowerLoad) .* problem.ext["load_scale"]
     total_hydro = get_area_total_time_series(problem, HydroGen)
     total_wind = get_area_total_time_series(
         problem,
         RenewableGen;
         filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
+
+    # Begin with solar equations
+    apply_solar!(problem)
+    pS = jump_model.obj_dict[:pS]
+    scenarios = 1:size(pS)[1]
 
     # -------------------------------------------------------------
     # Variables
@@ -184,12 +166,11 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     )
     pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, j in scenarios, t in time_steps] >= 0) # power ABOVE MINIMUM
     pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
-    pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
     if use_reg
         reg⁺ = JuMP.@variable(
             jump_model,
             reg⁺[
-                g in (use_storage_reserves ? union(reg⁺_device_names, storage_names) :
+                g in (use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
                       reg⁺_device_names),
                 t in time_steps,
             ] >= 0
@@ -197,7 +178,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         reg⁻ = JuMP.@variable(
             jump_model,
             reg⁻[
-                g in (use_storage_reserves ? union(reg⁻_device_names, storage_names) :
+                g in (use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
                       reg⁻_device_names),
                 t in time_steps,
             ] >= 0
@@ -207,8 +188,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         spin = JuMP.@variable(
             jump_model,
             spin[
-                g in (use_storage_reserves ? union(spin_device_names, storage_names) :
-                      spin_device_names),
+                g in spin_device_names,
                 t in time_steps,
             ] >= 0
         )
@@ -228,7 +208,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     end
 
     if use_storage
-        apply_storage!(problem)
+        apply_storage!(problem, storage_reserve_names)
         pb_in = jump_model.obj_dict[:pb_in]
         pb_out = jump_model.obj_dict[:pb_out]
     end
@@ -400,28 +380,13 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     )
 
     if use_reg
-        # Eq (17) Total reg up
-        reg⁺_constraints = JuMP.@constraint(
-            jump_model,
-            [t in time_steps],
-            sum(
-                reg⁺[g, t] for g in (
-                    use_storage_reserves ? union(reg⁺_device_names, storage_names) :
-                    reg⁺_device_names
-                )
-            ) >= required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
+
+        apply_reg_requirements!(problem,
+            reg⁺_device_names,
+            reg⁻_device_names,
+            storage_reserve_names
         )
-        # Eq (18) Total reg down
-        reg⁻_constraints = JuMP.@constraint(
-            jump_model,
-            [t in time_steps],
-            sum(
-                reg⁻[g, t] for g in (
-                    use_storage_reserves ? union(reg⁻_device_names, storage_names) :
-                    reg⁻_device_names
-                )
-            ) >= required_reg⁻[t] - (use_slack ? slack_reg⁻[t] : 0)
-        )
+
         # Eq (20) Reg up response time
         reg⁺_response_constraints = JuMP.@constraint(
             jump_model,
@@ -440,12 +405,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         spin_constraints = JuMP.@constraint(
             jump_model,
             [t in time_steps],
-            sum(
-                spin[g, t] for g in (
-                    use_storage_reserves ? union(spin_device_names, storage_names) :
-                    spin_device_names
-                )
-            ) >= required_spin[t] - (use_slack ? slack_spin[t] : 0)
+            sum(spin[g, t] for g in spin_device_names) >=
+            required_spin[t] - (use_slack ? slack_spin[t] : 0)
         )
         # Eq (22) Spin response time
         spin_response_constraints = JuMP.@constraint(
@@ -454,13 +415,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
             spin[g, t] <= L_SPIN * ramp_up[g]
         )
     end
-
-    # Eq (23) Solar scenarios
-    solar_constraints = JuMP.@constraint(
-        jump_model,
-        [j in scenarios, t in time_steps],
-        pS[j, t] <= area_solar_forecast_scenarios[j, t]
-    )
 
     # Eq (30) Power balance constraint, Eq (45) hydro included
     power_balance_constraint = JuMP.@constraint(
