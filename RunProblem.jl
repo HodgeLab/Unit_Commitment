@@ -18,10 +18,6 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
-# April 15: Totally clear (Day 105)
-# May 14th: under low tail midday, in low tail in afternoon (Day 134)
-# June 13th: Low tail in morning (Day 164)
-# May 17th: Day 137 (low in afternoon, but still mostly in range)
 formulation = isempty(ARGS) ? "D" : ARGS[1]
 initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[2]
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[3])
@@ -30,9 +26,31 @@ use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
-C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
+C_RR = isempty(ARGS) ? 10 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
 scenarios = 31
+
+scenario_plot_dict = Dict{String,Vector{Int64}}(
+    "2018-03-15T00:00:00" => [30, 29],
+    "2018-03-27T00:00:00" => [31, 13],
+    "2018-04-15T00:00:00" => [27, 30],
+    "2018-05-17T00:00:00" => [31, 19],
+    "2018-07-22T00:00:00" => [1, 5],
+    "2018-07-24T00:00:00" => [30, 13],
+    "2018-08-15T00:00:00" => [3, 29],
+    "2018-09-21T00:00:00" => [28, 23],
+    "2018-09-24T00:00:00" => [28, 14],
+    "2018-10-08T00:00:00" => [31, 23],
+    "2018-11-09T00:00:00" => [3, 18],
+    "2018-12-07T00:00:00" => [3, 24],
+    "2018-12-26T00:00:00" => [25, 13],
+)
+
+if initial_time in keys(scenario_plot_dict)
+    plot_scenarios = scenario_plot_dict[initial_time]
+else
+    plot_scenarios = 1:scenarios
+end
 
 if formulation == "D"
     formulation_dir = "Deterministic"
@@ -131,7 +149,7 @@ if status.value == 0
             output_path)
     end
 
-    for scenario in 1:(formulation == "D" ? 1 : scenarios)
+    for scenario in 1:(formulation == "D" ? 1 : plot_scenarios)
         plot_fuel(
             UC;
             scenario = (formulation == "D" ? nothing : scenario),

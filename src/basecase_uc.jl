@@ -35,7 +35,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
 
     # Constants
     MINS_IN_HOUR = 60.0
-    Δt = 1
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
