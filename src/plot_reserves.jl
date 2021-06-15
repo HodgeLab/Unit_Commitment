@@ -1,7 +1,8 @@
 function plot_reserve(
     problem::PSI.OperationsProblem{T}, 
     reserve_name::String;
-    use_solar_reserves = true,
+    use_solar_reg = true,
+    use_solar_spin = true,
     kwargs...) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     title = get(kwargs, :title, reserve_name)
     save_dir = get(kwargs, :save_dir, nothing)
@@ -25,18 +26,18 @@ function plot_reserve(
         reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :reg⁺
         if use_slack sym_dict["slack"] = :slack_reg⁺ end
-        if use_solar_reserves sym_dict["solar"] = :reg⁺_S end
-        if :supp⁺ in keys(jump_model.obj_dict) sym_dict["supp"] = :supp⁺ end
+        if use_solar_reg sym_dict["solar"] = :reg⁺_S end
     elseif reserve_name == "REG_DN"
         reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, reserve_name)
         sym_dict["reserve"] = :reg⁻
         if use_slack sym_dict["slack"] = :slack_reg⁻ end
-        if use_solar_reserves sym_dict["solar"] = :reg⁻_S end
-        if :supp⁻ in keys(jump_model.obj_dict) sym_dict["supp"] = :supp⁻ end
+        if use_solar_reg sym_dict["solar"] = :reg⁻_S end
     elseif reserve_name == "SPIN"
         reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :spin
+        if use_solar_spin sym_dict["solar"] = :spin_S end
         if use_slack sym_dict["slack"] = :spin end
+        if :supp in keys(jump_model.obj_dict) sym_dict["supp"] = :supp end
     else
         throw(ArgumentError("Allowable reserve names are REG_UP, REG_DN, or SPIN"))
     end
@@ -72,7 +73,7 @@ function plot_reserve(
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(reserves_agg, backend))
     if "supp" in keys(sym_dict)
-        DataFrames.rename!(reserves_agg, Dict("Imports/Exports" => (reserve_name == "REG_UP" ? "Supp⁺" : "Supp⁻")))
+        DataFrames.rename!(reserves_agg, Dict("Imports/Exports" => "Supp"))
     end
     p = plot_dataframe(
         reserves_agg,

@@ -1,4 +1,4 @@
-# To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true 1000 0.80
+# To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true true 1000 0.80
 # D for deterministic, S for stochastic, C for CVaR
 
 include("src/Unit_commitment.jl")
@@ -22,12 +22,13 @@ formulation = isempty(ARGS) ? "D" : ARGS[1]
 initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[2]
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
-use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[5])
-use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
-use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
-C_RR = isempty(ARGS) ? 10 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
-α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
+use_solar_reg = isempty(ARGS) ? true : parse(Bool, ARGS[5])
+use_solar_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
+use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[7])
+use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[8])
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[9])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
+α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[11]) # Risk tolerance level
 scenarios = 31
 
 scenario_plot_dict = Dict{String,Vector{Int64}}(
@@ -67,7 +68,8 @@ end
 optional_title =
     (use_storage ? " stor" : "") *
     (use_storage_reserves ? " storres" : "") *
-    (use_solar_reserves ? " solres" : "") *
+    (use_solar_reg ? " solreg" : "") *
+    (use_solar_spin ? " solspin" : "") *
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "")
 
 output_path = "./results/" * string(scenarios) * " scenarios/" * formulation_dir * 
@@ -113,7 +115,8 @@ UC.ext["cc_restrictions"] =
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
 UC.ext["storage_reserve_names"] = ["EXPOSE_STORAGE"]
-UC.ext["use_solar_reserves"] = use_solar_reserves
+UC.ext["use_solar_reg"] = use_solar_reg
+UC.ext["use_solar_spin"] = use_solar_spin
 UC.ext["use_reg"] = true
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
@@ -121,9 +124,9 @@ UC.ext["C_RR"] = C_RR * get_base_power(system_da)
 UC.ext["α"] = α
 UC.ext["C_res_penalty"] = 5000 * get_base_power(system_da)
 UC.ext["C_ener_penalty"] = 9000 * get_base_power(system_da)
-UC.ext["L_REG"] = 1 / 12 # 5 min
+UC.ext["L_REG"] = 1 / 60 # 1 min
 UC.ext["L_SPIN"] = 1 / 6 # 10 min
-UC.ext["load_scale"] = 1.15
+UC.ext["load_scale"] = 1
 UC.ext["solar_scale"] = 1
 UC.ext["storage_scale"] = 15
 
@@ -159,7 +162,8 @@ if status.value == 0
         plot_reserve(
                 UC,
                 "REG_UP";
-                use_solar_reserves = use_solar_reserves,
+                use_solar_reg = use_solar_reg,
+                use_solar_spin = use_solar_spin,
                 save_dir = output_path,
                 scenario = (formulation == "D" ? nothing : scenario)
             )
@@ -167,7 +171,8 @@ if status.value == 0
             plot_reserve(
                 UC,
                 "REG_DN";
-                use_solar_reserves = use_solar_reserves,
+                use_solar_reg = use_solar_reg,
+                use_solar_spin = use_solar_spin,
                 save_dir = output_path,
                 scenario = (formulation == "D" ? nothing : scenario)
             )
@@ -176,7 +181,8 @@ if status.value == 0
     plot_reserve(
         UC,
         "SPIN";
-        use_solar_reserves = use_solar_reserves,
+        use_solar_reg = use_solar_reg,
+        use_solar_spin = use_solar_spin,
         save_dir = output_path,
         scenario = nothing
     )

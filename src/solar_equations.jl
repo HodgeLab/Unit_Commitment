@@ -1,7 +1,8 @@
 
 function apply_solar!(problem::PSI.OperationsProblem{T}
     ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
-    use_solar_reserves = problem.ext["use_solar_reserves"]
+    use_solar_reg = problem.ext["use_solar_reg"]
+    use_solar_spin = problem.ext["use_solar_spin"]
     use_reg = problem.ext["use_reg"]
     solar_scale = problem.ext["solar_scale"]
 
@@ -24,7 +25,7 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     scenarios = 1:size(area_solar_forecast_scenarios)[1]
 
     pS = JuMP.@variable(jump_model, pS[j in scenarios, t in time_steps] >= 0)
-    if use_reg && use_solar_reserves
+    if use_reg && use_solar_reg
         required_reg⁻ = get_time_series_values(
             Deterministic,
             PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN"),
@@ -38,6 +39,9 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
             0 <= reg⁻_S[j in scenarios, t in time_steps] <= required_reg⁻[t]
         )
     end
+    if use_spin && use_solar_spin
+        spin_S = JuMP.@variable(jump_model, spin_S[j in scenarios, t in time_steps] >= 0)
+    end
 
     # Eq (23) Solar scenarios
     solar_constraints = JuMP.@constraint(
@@ -47,18 +51,21 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     )
 
     # Solar reserve holding
-    if use_reg && use_solar_reserves
-        solar_reserve_dn_constraint =
-        JuMP.@constraint(
-            jump_model,
-            [j in scenarios, t in time_steps],
-            reg⁻_S[j, t] <= pS[j, t]
-        )
+    if use_reg && (use_solar_reg || use_solar_spin)
+        if use_solar_reg
+            solar_reserve_dn_constraint =
+            JuMP.@constraint(
+                jump_model,
+                [j in scenarios, t in time_steps],
+                reg⁻_S[j, t] <= pS[j, t]
+            )
+        end
         solar_reserve_up_constraints =
         JuMP.@constraint(
             jump_model,
             [j in scenarios, t in time_steps],
-            reg⁺_S[j, t] <=
+            (use_solar_reg ? reg⁺_S[j, t] : 0) +
+            (use_solar_spin ? spin_S[j, t] : 0) <=
             area_solar_forecast_scenarios[j, t] - pS[j, t]
         )
     end
@@ -68,7 +75,7 @@ end
 
 function apply_solar!(problem::PSI.OperationsProblem{T}
     ) where T <: BasecaseUnitCommitmentCC
-    use_solar_reserves = problem.ext["use_solar_reserves"]
+    use_solar_reg = problem.ext["use_solar_reg"]
     use_reg = problem.ext["use_reg"]
     solar_scale = problem.ext["solar_scale"]
 
@@ -79,7 +86,7 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     case_initial_time = PSI.get_initial_time(problem)
 
     pS = JuMP.@variable(jump_model, pS[t in time_steps] >= 0)
-    if use_reg && use_solar_reserves
+    if use_reg && use_solar_reg
         required_reg⁻ = get_time_series_values(
             Deterministic,
             PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN"),
@@ -92,6 +99,9 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
             jump_model,
             0 <= reg⁻_S[t in time_steps] <= required_reg⁻[t]
             )
+    end
+    if use_spin && use_solar_spin
+        spin_S = JuMP.@variable(jump_model, spin_S[t in time_steps] >= 0)
     end
 
     # Deterministic solar forecast
@@ -109,18 +119,21 @@ function apply_solar!(problem::PSI.OperationsProblem{T}
     )
 
     # Solar reserve holding
-    if use_reg && use_solar_reserves
-        solar_reserve_dn_constraint =
-        JuMP.@constraint(
-            jump_model,
-            [t in time_steps],
-            reg⁻_S[t] <= pS[t]
-        )
+    if use_reg && (use_solar_reg || use_solar_spin)
+        if use_solar_reg
+            solar_reserve_dn_constraint =
+            JuMP.@constraint(
+                jump_model,
+                [t in time_steps],
+                reg⁻_S[t] <= pS[t]
+            )
+        end
         solar_reserve_up_constraints =
         JuMP.@constraint(
             jump_model,
             [t in time_steps],
-            reg⁺_S[t] <=
+            (use_solar_reg ? reg⁺_S[t] : 0) +
+            (use_solar_spin ? spin_S[t] : 0) <=
             total_solar[t] - pS[t]
         )
     end
