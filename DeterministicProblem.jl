@@ -96,11 +96,17 @@ for month in 1:12
         UC.ext["use_must_run"] = use_must_run
         UC.ext["C_res_penalty"] = 5000
         UC.ext["C_ener_penalty"] = 100000
-        UC.ext["L_REG"] = 1 / 60 # 1 min
+        UC.ext["L_REG"] = 1 / 12 # 5 min
         UC.ext["L_SPIN"] = 1 / 6 # 10 min
         UC.ext["load_scale"] = 1
         UC.ext["solar_scale"] = 1
         UC.ext["storage_scale"] = 15
+        UC.ext["solar_reg_prop"] = 1
+        UC.ext["wind_reg_prop"] = 1
+        UC.ext["solar_spin_prop"] = 1
+        UC.ext["wind_spin_prop"] = 1
+        UC.ext["renewable_reg_prop"] = 1
+        UC.ext["renewable_spin_prop"] = 1
 
         # Build and solve the standalone problem
         build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug
@@ -123,7 +129,6 @@ for month in 1:12
             plot_reserve(
                 UC,
                 "REG_UP";
-                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = nothing
             )
@@ -131,7 +136,6 @@ for month in 1:12
             plot_reserve(
                 UC,
                 "REG_DN";
-                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = nothing
             )
@@ -139,7 +143,6 @@ for month in 1:12
             plot_reserve(
                 UC,
                 "SPIN";
-                use_solar_reserves = use_solar_reserves,
                 save_dir = output_path,
                 scenario = nothing
             )

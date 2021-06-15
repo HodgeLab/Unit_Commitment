@@ -27,6 +27,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
+    case_initial_time = PSI.get_initial_time(problem)
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
@@ -59,16 +60,34 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
+
+    required_reg⁺ = get_time_series_values(
+        Deterministic,
+        reg_reserve_up,
+        "requirement";
+        start_time = case_initial_time,
+    )
+    required_reg⁻ = get_time_series_values(
+        Deterministic,
+        reg_reserve_dn,
+        "requirement";
+        start_time = case_initial_time,
+    )
+    required_spin = get_time_series_values(
+        Deterministic,
+        spin_reserve,
+        "requirement";
+        start_time = case_initial_time,
+    )
     total_load = get_area_total_time_series(problem, PowerLoad) .* problem.ext["load_scale"]
     total_hydro = get_area_total_time_series(problem, HydroGen)
-    total_wind = get_area_total_time_series(
-        problem,
-        RenewableGen;
-        filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
-    )
 
     # Begin with solar equations
-    apply_solar!(problem)
+    apply_solar!(problem,
+        required_reg⁺,
+        required_reg⁻,
+        required_spin
+    )
     pS = jump_model.obj_dict[:pS]
     scenarios = 1:size(pS)[1]
 
@@ -139,9 +158,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     # Constraints
     # -------------------------------------------------------------
 
-    # Wind constraint
-    wind_constraint =
-        JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t]
+    apply_wind!(problem,
+        required_reg⁺,
+        required_reg⁻,
+        required_spin
     )
 
     apply_thermal_constraints!(problem,

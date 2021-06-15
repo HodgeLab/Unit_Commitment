@@ -27,6 +27,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
+    case_initial_time = PSI.get_initial_time(problem)
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
@@ -52,23 +53,44 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
     reg_reserve_dn =
         PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
     spin_reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "SPIN")
-    reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
-    reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
-    spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
+    # reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
+    # reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
+    # spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
+    reg⁺_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    reg⁻_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    spin_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
 
     # -------------------------------------------------------------
     # Time-series data
     # -------------------------------------------------------------
+
+    required_reg⁺ = get_time_series_values(
+        Deterministic,
+        reg_reserve_up,
+        "requirement";
+        start_time = case_initial_time,
+    )
+    required_reg⁻ = get_time_series_values(
+        Deterministic,
+        reg_reserve_dn,
+        "requirement";
+        start_time = case_initial_time,
+    )
+    required_spin = get_time_series_values(
+        Deterministic,
+        spin_reserve,
+        "requirement";
+        start_time = case_initial_time,
+    )
     total_load = get_area_total_time_series(problem, PowerLoad) .* problem.ext["load_scale"]
     total_hydro = get_area_total_time_series(problem, HydroGen)
-    total_wind = get_area_total_time_series(
-        problem,
-        RenewableGen;
-        filter = x -> get_prime_mover(x) != PrimeMovers.PVe,
-    )
 
     # Begin with solar equations
-    apply_solar!(problem)
+    apply_solar!(problem,
+        required_reg⁺,
+        required_reg⁻,
+        required_spin
+    )
     pS = jump_model.obj_dict[:pS]
 
     # -------------------------------------------------------------
@@ -140,9 +162,10 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
     # Constraints
     # -------------------------------------------------------------
 
-    # Wind constraint
-    wind_constraint =
-        JuMP.@constraint(jump_model, [t in time_steps], pW[t] <= total_wind[t]
+    apply_wind!(problem,
+        required_reg⁺,
+        required_reg⁻,
+        required_spin
     )
 
     apply_thermal_constraints!(problem,
@@ -162,6 +185,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
         apply_reg_requirements!(problem,
             reg⁺_device_names,
             reg⁻_device_names,
+            required_reg⁺,
+            required_reg⁻,
             storage_reserve_names
         )
     end
@@ -169,6 +194,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
     if use_spin
         apply_spin_requirements!(problem,
             spin_device_names,
+            required_spin,
             storage_reserve_names
         )
     end
