@@ -27,6 +27,9 @@ function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
     if use_solar_spin
         spin_S = obj_dict[:spin_S]
     end
+    if use_slack
+        slack_spin = obj_dict[:slack_spin]
+    end
 
     if use_supp
         supp = obj_dict[:supp]

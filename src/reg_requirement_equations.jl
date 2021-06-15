@@ -37,6 +37,10 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
         reg⁺_S = obj_dict[:reg⁺_S]
         reg⁻_S = obj_dict[:reg⁻_S]
     end
+    if use_slack
+        slack_reg⁺ = obj_dict[:slack_reg⁺]
+        slack_reg⁻ = obj_dict[:slack_reg⁻]
+    end
 
     if (use_solar_reg && ndims(reg⁺_S) == 2)
         scenarios = 1:size(reg⁺_S)[1]

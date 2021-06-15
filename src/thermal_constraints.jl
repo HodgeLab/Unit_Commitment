@@ -729,7 +729,7 @@ function _apply_thermal_scenario_based_constraints!(
             if t == 1  # pg_lib (9)
                 rampdn_constraint_reg[g, 1] = JuMP.@constraint(
                     jump_model,
-                    ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - reg⁻[g, t] <=
+                    ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - reg⁻[g, 1] <=
                     ramp_dn[g]
                 )
             else
