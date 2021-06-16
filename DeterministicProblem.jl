@@ -123,6 +123,7 @@ for initial_time in keys(scenario_plot_dict)
         UC.ext["wind_spin_prop"] = 1
         UC.ext["renewable_reg_prop"] = 1
         UC.ext["renewable_spin_prop"] = 1
+        UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
 
         # Build and solve the standalone problem
         build!(UC; output_dir = output_path, serialize = false) # Can add balance_slack_variables (load shedding and curtailment), use serialize=true to get OptimizationModel.json to debug

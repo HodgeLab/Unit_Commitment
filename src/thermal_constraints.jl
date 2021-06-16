@@ -1,8 +1,6 @@
 
 function apply_thermal_constraints!(
         problem::PSI.OperationsProblem{T},
-        reg⁺_device_names::Vector{String},
-        reg⁻_device_names::Vector{String},
         spin_device_names::Vector{String}
     ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
     use_reg = problem.ext["use_reg"]
@@ -10,6 +8,7 @@ function apply_thermal_constraints!(
     use_must_run = problem.ext["use_must_run"]
     L_REG = problem.ext["L_REG"]
     L_SPIN = problem.ext["L_SPIN"]
+    allowable_reserve_prop = problem.ext["allowable_reserve_prop"]
 
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
@@ -22,6 +21,10 @@ function apply_thermal_constraints!(
     # ------------------------------------------------
     MINS_IN_HOUR = 60.0
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+    pg_lim = Dict(
+        g => get_active_power_limits(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
     get_rmp_up_limit(g) = PSY.get_ramp_limits(g).up
     get_rmp_dn_limit(g) = PSY.get_ramp_limits(g).down
     ramp_up = Dict(
@@ -61,6 +64,8 @@ function apply_thermal_constraints!(
     wg = jump_model.obj_dict[:wg]
     vg = jump_model.obj_dict[:vg]
     δ_sg = jump_model.obj_dict[:δ_sg]
+    total_reserve⁺ = optimization_container.expressions[:total_reserve⁺]
+    total_reserve⁻ = optimization_container.expressions[:total_reserve⁻]
 
     # Commitment constraints
     commitment_constraints = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
@@ -201,22 +206,22 @@ function apply_thermal_constraints!(
         vg[g, t] == sum(δ_sg[g, s, t] for s in startup_categories)
     )
 
-    if use_reg
-        reg⁺ = jump_model.obj_dict[:reg⁺]
-        reg⁻ = jump_model.obj_dict[:reg⁻]
-        # Reg up response time
-        reg⁺_response_constraints = JuMP.@constraint(
-            jump_model,
-            [g in reg⁺_device_names, t in time_steps],
-            reg⁺[g, t] <= L_REG * ramp_up[g]
-        )
-        # Reg down response time
-        reg⁻_response_constraints = JuMP.@constraint(
-            jump_model,
-            [g in reg⁻_device_names, t in time_steps],
-            reg⁻[g, t] <= L_REG * ramp_dn[g]
-        )
-    end
+    # if use_reg
+    #     reg⁺ = jump_model.obj_dict[:reg⁺]
+    #     reg⁻ = jump_model.obj_dict[:reg⁻]
+    #     # Reg up response time
+    #     reg⁺_response_constraints = JuMP.@constraint(
+    #         jump_model,
+    #         [g in reg⁺_device_names, t in time_steps],
+    #         reg⁺[g, t] <= L_REG * ramp_up[g]
+    #     )
+    #     # Reg down response time
+    #     reg⁻_response_constraints = JuMP.@constraint(
+    #         jump_model,
+    #         [g in reg⁻_device_names, t in time_steps],
+    #         reg⁻[g, t] <= L_REG * ramp_dn[g]
+    #     )
+    # end
 
     if use_spin
         spin = jump_model.obj_dict[:spin]
@@ -228,10 +233,20 @@ function apply_thermal_constraints!(
         )
     end
 
+    # Restrict reserve allocation by % rather than response time
+    JuMP.@constraint(
+        jump_model,
+        [g in thermal_gen_names, t in time_steps],
+        total_reserve⁺[g, t] <= pg_lim[g].max * allowable_reserve_prop
+    )
+    JuMP.@constraint(
+        jump_model,
+        [g in thermal_gen_names, t in time_steps],
+        total_reserve⁻[g, t] <= pg_lim[g].max * allowable_reserve_prop
+    )
+
     _apply_thermal_scenario_based_constraints!(problem,
-        reg⁺_device_names,
-        reg⁻_device_names,
-        spin_device_names,
+        pg_lim,
         ramp_up,
         ramp_dn,
         ug_t0)
@@ -242,9 +257,7 @@ end
 
 function _apply_thermal_scenario_based_constraints!(
         problem::PSI.OperationsProblem{T},
-        reg⁺_device_names::Vector{String},
-        reg⁻_device_names::Vector{String},
-        spin_device_names::Vector{String},
+        pg_lim::Dict{},
         ramp_up::Dict{},
         ramp_dn::Dict{},
         ug_t0::Dict{}
@@ -262,10 +275,6 @@ function _apply_thermal_scenario_based_constraints!(
     # Input data
     # ------------------------------------------------
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
-    pg_lim = Dict(
-        g => get_active_power_limits(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
     pg_power_trajectory = Dict(
         g => get_power_trajectory(get_component(ThermalMultiStart, system, g)) for
         g in thermal_gen_names
@@ -278,17 +287,6 @@ function _apply_thermal_scenario_based_constraints!(
     variable_cost = Dict(
         g => get_variable(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
     )
-    no_res⁺_device_names = setdiff(
-        thermal_gen_names,
-        union(
-            use_reg ? reg⁺_device_names : Vector{String}(),
-            use_spin ? spin_device_names : Vector{String}(),
-        ),
-    )
-    no_res⁻_device_names = setdiff(
-        thermal_gen_names,
-        (use_reg ? reg⁻_device_names : Vector{String}())
-    )
 
     # ------------------------------------------------
     # Collect or define variables
@@ -297,15 +295,14 @@ function _apply_thermal_scenario_based_constraints!(
     ug = jump_model.obj_dict[:ug]
     wg = jump_model.obj_dict[:wg]
     vg = jump_model.obj_dict[:vg]
-    reg⁺ = jump_model.obj_dict[:reg⁺]
-    reg⁻ = jump_model.obj_dict[:reg⁻]
-    spin = jump_model.obj_dict[:spin]
     λ = JuMP.@variable(
         jump_model,
         0 <=
         λ[g in thermal_gen_names, j in scenarios, i in 1:length(variable_cost[g]), t in time_steps] <=
         PSY.get_breakpoint_upperbounds(variable_cost[g])[i]
     )
+    total_reserve⁺ = optimization_container.expressions[:total_reserve⁺]
+    total_reserve⁻ = optimization_container.expressions[:total_reserve⁻]
 
     # PWL variable cost constraint
     # PWL Cost function auxiliary variables
@@ -326,29 +323,11 @@ function _apply_thermal_scenario_based_constraints!(
     )
     optimization_container.expressions[:Cg] = Cg
 
-    # Max output 1 -- in 3 parts for 3 reserve groupings
-    if use_spin
-        maxoutput1_constraint_spin = JuMP.@constraint(
-            jump_model,
-            [g in spin_device_names, j in scenarios, t in time_steps],
-            pg[g, j, t] + spin[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
-        )
-    end
-    if use_reg
-        maxoutput1_constraint_reg = JuMP.@constraint(
-            jump_model,
-            [g in reg⁺_device_names, j in scenarios, t in time_steps],
-            pg[g, j, t] + reg⁺[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
-        )
-    end
-    maxoutput1_constraint_none = JuMP.@constraint(
+    # Max output 1
+    maxoutput1_constraint = JuMP.@constraint(
         jump_model,
-        [g in no_res⁺_device_names, j in scenarios, t in time_steps],
-        pg[g, j, t] <=
+        [g in thermal_gen_names, j in scenarios, t in time_steps],
+        pg[g, j, t] + total_reserve⁺[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
     )
@@ -356,42 +335,22 @@ function _apply_thermal_scenario_based_constraints!(
     # Limits on downward reserves 
     reservedn_constraint_reg = JuMP.@constraint(
         jump_model,
-        [g in reg⁻_device_names, j in scenarios, t in time_steps],
-        pg[g, j, t] - reg⁻[g, t] >= 0
+        [g in thermal_gen_names, j in scenarios, t in time_steps],
+        pg[g, j, t] - total_reserve⁻[g, t] >= 0
     )
 
-    # Max output 2 -- in 3 parts for 3 reserve groupings
-    if use_spin
-        maxoutput2_constraint_spin = JuMP.@constraint(
-            jump_model,
-            [g in spin_device_names, j in scenarios, t in time_steps[1:(end - 1)]],
-            pg[g, j, t] + spin[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
-            # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
-        )
-    end
-    if use_reg
-        maxoutput2_constraint_reg = JuMP.@constraint(
-            jump_model,
-            [g in reg⁺_device_names, j in scenarios, t in time_steps[1:(end - 1)]],
-            pg[g, j, t] + reg⁺[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
-            # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
-        )
-    end
-    maxoutput2_constraint_none = JuMP.@constraint(
+    # Max output 2
+    maxoutput2_constraint = JuMP.@constraint(
         jump_model,
-        [g in no_res⁺_device_names, j in scenarios, t in time_steps[1:(end - 1)]],
-        pg[g, j, t] <=
+        [g in thermal_gen_names, j in scenarios, t in time_steps[1:(end - 1)]],
+        pg[g, j, t] + total_reserve⁺[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
         # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
     )
     # Initial condition ignores t0 reserves, is same for all reserve groups. pg_lib (10)
     # Leaving separate because not indexed over j
-    maxoutput2_constraint_all1 = JuMP.@constraint(
+    maxoutput2_constraint_1 = JuMP.@constraint(
         jump_model,
         [g in thermal_gen_names],
         ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
@@ -400,107 +359,47 @@ function _apply_thermal_scenario_based_constraints!(
         # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, 1]
     )
 
-    # Ramp up -- in 3 parts for 3 reserve groupings
-    if use_spin
-        rampup_constraint_spin = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-            undef,
-            spin_device_names,
-            scenarios,
-            time_steps,
-        )
-        for g in spin_device_names, j in scenarios, t in time_steps
-            if t == 1  # pg_lib (8)
-                rampup_constraint_spin[g, j, 1] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, j, 1] + spin[g, 1] -
-                    ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
-                )
-            else
-                rampup_constraint_spin[g, j, t] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, j, t] + spin[g, t] - pg[g, j, t - 1] <= ramp_up[g]
-                )
-            end
-        end
-    end
-    if use_reg
-        rampup_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-            undef,
-            reg⁺_device_names,
-            scenarios,
-            time_steps,
-        )
-        for g in reg⁺_device_names, j in scenarios, t in time_steps
-            if t == 1  # pg_lib (8)
-                rampup_constraint_reg[g, j, 1] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, j, 1] + reg⁺[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
-                    ramp_up[g]
-                )
-            else
-                rampup_constraint_reg[g, j, t] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, j, t] + reg⁺[g, t] - pg[g, j, t - 1] <= ramp_up[g]
-                )
-            end
-        end
-    end
-    rampup_constraint_none = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
+    # Ramp up
+    rampup_constraint = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
         undef,
-        no_res⁺_device_names,
+        thermal_gen_names,
         scenarios,
         time_steps,
     )
-    for g in no_res⁺_device_names, j in scenarios, t in time_steps
+    for g in thermal_gen_names, j in scenarios, t in time_steps
         if t == 1  # pg_lib (8)
-            rampup_constraint_none[g, j, 1] = JuMP.@constraint(
+            rampup_constraint[g, j, 1] = JuMP.@constraint(
                 jump_model,
-                pg[g, j, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
+                pg[g, j, 1] + total_reserve⁺[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
+                ramp_up[g]
             )
         else
-            rampup_constraint_none[g, j, t] =
-                JuMP.@constraint(jump_model, pg[g, j, t] - pg[g, j, t - 1] <= ramp_up[g])
+            rampup_constraint[g, j, t] = JuMP.@constraint(
+                jump_model,
+                pg[g, j, t] + total_reserve⁺[g, t] - pg[g, j, t - 1] <= ramp_up[g]
+            )
         end
     end
 
-    # Ramp down -- in 2 parts for 2 reserve groupings
-    if use_reg
-        rampdn_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-            undef,
-            reg⁻_device_names,
-            scenarios,
-            time_steps,
-        )
-        for g in reg⁻_device_names, j in scenarios, t in time_steps
-            if t == 1  # pg_lib (9)
-                rampdn_constraint_reg[g, j, 1] = JuMP.@constraint(
-                    jump_model,
-                    ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, j, 1] - reg⁻[g, 1] <=
-                    ramp_dn[g]
-                )
-            else
-                rampdn_constraint_reg[g, j, t] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, j, t - 1] - pg[g, j, t] - reg⁻[g, t] <= ramp_dn[g]
-                )
-            end
-        end
-    end
-    rampdn_constraint_none = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
+    # Ramp down
+    rampdn_constraint = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
         undef,
-        no_res⁻_device_names,
+        thermal_gen_names,
         scenarios,
         time_steps,
     )
-    for g in no_res⁻_device_names, j in scenarios, t in time_steps
+    for g in thermal_gen_names, j in scenarios, t in time_steps
         if t == 1  # pg_lib (9)
-            rampdn_constraint_none[g, j, 1] = JuMP.@constraint(
+            rampdn_constraint[g, j, 1] = JuMP.@constraint(
                 jump_model,
-                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, j, 1] <= ramp_dn[g]
+                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, j, 1] - total_reserve⁻[g, 1] <=
+                ramp_dn[g]
             )
         else
-            rampdn_constraint_none[g, j, t] =
-                JuMP.@constraint(jump_model, pg[g, j, t - 1] - pg[g, j, t] <= ramp_dn[g])
+            rampdn_constraint[g, j, t] = JuMP.@constraint(
+                jump_model,
+                pg[g, j, t - 1] - pg[g, j, t] - total_reserve⁻[g, t] <= ramp_dn[g]
+            )
         end
     end
 
@@ -539,9 +438,7 @@ end
 
 function _apply_thermal_scenario_based_constraints!(
         problem::PSI.OperationsProblem{T},
-        reg⁺_device_names::Vector{String},
-        reg⁻_device_names::Vector{String},
-        spin_device_names::Vector{String},
+        pg_lim::Dict{},
         ramp_up::Dict{},
         ramp_dn::Dict{},
         ug_t0::Dict{}
@@ -558,10 +455,6 @@ function _apply_thermal_scenario_based_constraints!(
     # Input data
     # ------------------------------------------------
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
-    pg_lim = Dict(
-        g => get_active_power_limits(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
     pg_power_trajectory = Dict(
         g => get_power_trajectory(get_component(ThermalMultiStart, system, g)) for
         g in thermal_gen_names
@@ -574,17 +467,6 @@ function _apply_thermal_scenario_based_constraints!(
     variable_cost = Dict(
         g => get_variable(get_operation_cost(get_component(ThermalMultiStart, system, g))) for g in thermal_gen_names
     )
-    no_res⁺_device_names = setdiff(
-        thermal_gen_names,
-        union(
-            use_reg ? reg⁺_device_names : Vector{String}(),
-            use_spin ? spin_device_names : Vector{String}(),
-        ),
-    )
-    no_res⁻_device_names = setdiff(
-        thermal_gen_names,
-        (use_reg ? reg⁻_device_names : Vector{String}())
-    )
 
     # ------------------------------------------------
     # Collect or define variables
@@ -593,15 +475,14 @@ function _apply_thermal_scenario_based_constraints!(
     ug = jump_model.obj_dict[:ug]
     wg = jump_model.obj_dict[:wg]
     vg = jump_model.obj_dict[:vg]
-    reg⁺ = jump_model.obj_dict[:reg⁺]
-    reg⁻ = jump_model.obj_dict[:reg⁻]
-    spin = jump_model.obj_dict[:spin]
     λ = JuMP.@variable(
         jump_model,
         0 <=
         λ[g in thermal_gen_names, i in 1:length(variable_cost[g]), t in time_steps] <=
         PSY.get_breakpoint_upperbounds(variable_cost[g])[i]
     )
+    total_reserve⁺ = optimization_container.expressions[:total_reserve⁺]
+    total_reserve⁻ = optimization_container.expressions[:total_reserve⁻]
 
     # PWL variable cost constraint
     # PWL Cost function auxiliary variables
@@ -622,29 +503,11 @@ function _apply_thermal_scenario_based_constraints!(
     )
     optimization_container.expressions[:Cg] = Cg
 
-    # Max output 1 -- in 3 parts for 3 reserve groupings
-    if use_spin
-        maxoutput1_constraint_spin = JuMP.@constraint(
-            jump_model,
-            [g in spin_device_names, t in time_steps],
-            pg[g, t] + spin[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
-        )
-    end
-    if use_reg
-        maxoutput1_constraint_reg = JuMP.@constraint(
-            jump_model,
-            [g in reg⁺_device_names, t in time_steps],
-            pg[g, t] + reg⁺[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
-        )
-    end
-    maxoutput1_constraint_none = JuMP.@constraint(
+    # Max output 1
+    maxoutput1_constraint = JuMP.@constraint(
         jump_model,
-        [g in no_res⁺_device_names, t in time_steps],
-        pg[g, t] <=
+        [g in thermal_gen_names, t in time_steps],
+        pg[g, t] + total_reserve⁺[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
     )
@@ -653,36 +516,16 @@ function _apply_thermal_scenario_based_constraints!(
     if use_reg
         reservedn_constraint_reg = JuMP.@constraint(
             jump_model,
-            [g in reg⁻_device_names, t in time_steps],
-            pg[g, t] - reg⁻[g, t] >= 0
+            [g in thermal_gen_names, t in time_steps],
+            pg[g, t] - total_reserve⁻[g, t] >= 0
         )
     end
 
-    # Max output 2 -- in 3 parts for 3 reserve groupings
-    if use_spin
-        maxoutput2_constraint_spin = JuMP.@constraint(
-            jump_model,
-            [g in spin_device_names, t in time_steps[1:(end - 1)]],
-            pg[g, t] + spin[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
-            # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
-        )
-    end
-    if use_reg
-        maxoutput2_constraint_reg = JuMP.@constraint(
-            jump_model,
-            [g in reg⁺_device_names, t in time_steps[1:(end - 1)]],
-            pg[g, t] + reg⁺[g, t] <=
-            (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-            max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
-            # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
-        )
-    end
-    maxoutput2_constraint_none = JuMP.@constraint(
+    # Max output 2
+    maxoutput2_constraint_reg = JuMP.@constraint(
         jump_model,
-        [g in no_res⁺_device_names, t in time_steps[1:(end - 1)]],
-        pg[g, t] <=
+        [g in thermal_gen_names, t in time_steps[1:(end - 1)]],
+        pg[g, t] + total_reserve⁺[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
         max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
         # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
@@ -698,102 +541,44 @@ function _apply_thermal_scenario_based_constraints!(
     )
 
     # Ramp up -- in 3 parts for 3 reserve groupings
-    if use_spin
-        rampup_constraint_spin = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-            undef,
-            spin_device_names,
-            time_steps,
-        )
-        for g in spin_device_names, t in time_steps
-            if t == 1  # pg_lib (8)
-                rampup_constraint_spin[g, 1] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, 1] + spin[g, 1] -
-                    ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
-                )
-            else
-                rampup_constraint_spin[g, t] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, t] + spin[g, t] - pg[g, t - 1] <= ramp_up[g]
-                )
-            end
-        end
-    end
-    if use_reg
-        rampup_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-            undef,
-            reg⁺_device_names,
-            time_steps,
-        )
-        for g in reg⁺_device_names, t in time_steps
-            if t == 1  # pg_lib (8)
-                rampup_constraint_reg[g, 1] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, 1] + reg⁺[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
-                    ramp_up[g]
-                )
-            else
-                rampup_constraint_reg[g, t] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, t] + reg⁺[g, t] - pg[g, t - 1] <= ramp_up[g]
-                )
-            end
-        end
-    end
-    rampup_constraint_none = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
+    rampup_constraint = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
         undef,
-        no_res⁺_device_names,
+        thermal_gen_names,
         time_steps,
     )
-    for g in no_res⁺_device_names, t in time_steps
+    for g in thermal_gen_names, t in time_steps
         if t == 1  # pg_lib (8)
-            rampup_constraint_none[g, 1] = JuMP.@constraint(
+            rampup_constraint[g, 1] = JuMP.@constraint(
                 jump_model,
-                pg[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
+                pg[g, 1] + total_reserve⁺[g, 1] -
+                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
             )
         else
-            rampup_constraint_none[g, t] =
-                JuMP.@constraint(jump_model, pg[g, t] - pg[g, t - 1] <= ramp_up[g])
+            rampup_constraint[g, t] = JuMP.@constraint(
+                jump_model,
+                pg[g, t] + total_reserve⁺[g, t] - pg[g, t - 1] <= ramp_up[g]
+            )
         end
     end
 
-    # Ramp down -- in 2 parts for 2 reserve groupings
-    if use_reg
-        rampdn_constraint_reg = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
-            undef,
-            reg⁻_device_names,
-            time_steps,
-        )
-        for g in reg⁻_device_names, t in time_steps
-            if t == 1  # pg_lib (9)
-                rampdn_constraint_reg[g, 1] = JuMP.@constraint(
-                    jump_model,
-                    ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - reg⁻[g, 1] <=
-                    ramp_dn[g]
-                )
-            else
-                rampdn_constraint_reg[g, t] = JuMP.@constraint(
-                    jump_model,
-                    pg[g, t - 1] - pg[g, t] - reg⁻[g, t] <= ramp_dn[g]
-                )
-            end
-        end
-    end
-
-    rampdn_constraint_none = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
+    # Ramp down
+    rampdn_constraint = JuMP.Containers.DenseAxisArray{JuMP.ConstraintRef}(
         undef,
-        no_res⁻_device_names,
+        thermal_gen_names,
         time_steps,
     )
-    for g in no_res⁻_device_names, t in time_steps
+    for g in thermal_gen_names, t in time_steps
         if t == 1  # pg_lib (9)
-            rampdn_constraint_none[g, 1] = JuMP.@constraint(
+            rampdn_constraint[g, 1] = JuMP.@constraint(
                 jump_model,
-                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] <= ramp_dn[g]
+                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - total_reserve⁻[g, 1] <=
+                ramp_dn[g]
             )
         else
-            rampdn_constraint_none[g, t] =
-                JuMP.@constraint(jump_model, pg[g, t - 1] - pg[g, t] <= ramp_dn[g])
+            rampdn_constraint[g, t] = JuMP.@constraint(
+                jump_model,
+                pg[g, t - 1] - pg[g, t] - total_reserve⁻[g, t] <= ramp_dn[g]
+            )
         end
     end
 

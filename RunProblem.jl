@@ -147,6 +147,7 @@ UC.ext["wind_spin_prop"] = 1
 UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
 UC.ext["supp_type"] = supp_type
+UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug

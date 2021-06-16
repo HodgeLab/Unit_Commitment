@@ -149,6 +149,21 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
             ] >= 0
         )
     end
+    # Register expression of total reserves for each generator
+    total_reserve⁺ = JuMP.@expression(
+        jump_model,
+        [g in thermal_gen_names, t in time_steps],
+        (g in reg⁺_device_names ? reg⁺[g, t] : 0) +
+        (g in spin_device_names ? spin[g, t] : 0)
+    )
+    total_reserve⁻ = JuMP.@expression(
+        jump_model,
+        [g in thermal_gen_names, t in time_steps],
+        (g in reg⁻_device_names ? reg⁻[g, t] : 0)
+    )
+    optimization_container.expressions[:total_reserve⁺] = total_reserve⁺
+    optimization_container.expressions[:total_reserve⁻] = total_reserve⁻
+
     if use_slack
         slack_reg⁺ = JuMP.@variable(jump_model, slack_reg⁺[t in time_steps] >= 0)
         slack_reg⁻ = JuMP.@variable(jump_model, slack_reg⁻[t in time_steps] >= 0)
@@ -168,8 +183,6 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     )
 
     apply_thermal_constraints!(problem,
-        reg⁺_device_names,
-        reg⁻_device_names,
         spin_device_names
     )
     Cg = optimization_container.expressions[:Cg]
