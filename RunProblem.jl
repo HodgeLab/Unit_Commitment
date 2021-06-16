@@ -1,4 +1,4 @@
-# To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true true true 1000 0.80
+# To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true true true 1000 0.80 generic
 # D for deterministic, S for stochastic, C for CVaR
 
 include("src/Unit_commitment.jl")
@@ -30,6 +30,7 @@ use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[9])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[10])
 C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[11]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[12]) # Risk tolerance level
+supp_type = isempty(ARGS) ? "generic" : ARGS[13]
 scenarios = 31
 
 scenario_plot_dict = Dict{String,Vector{Int64}}(
@@ -60,6 +61,7 @@ if formulation == "D"
 elseif formulation == "C"
     formulation_dir = "CVAR"
     custom_problem = CVaRReserveUnitCommitmentCC
+    if !(supp_type in ["generic", "nonspin"]) throw(ArgumentError("Supp reserves must be generic or nonspin")) end
 elseif formulation == "S"
     formulation_dir = "Stochastic"
     custom_problem = StochasticUnitCommitmentCC
@@ -134,15 +136,17 @@ UC.ext["C_res_penalty"] = 5000 * get_base_power(system_da)
 UC.ext["C_ener_penalty"] = 9000 * get_base_power(system_da)
 UC.ext["L_REG"] = 1 / 12 # 5 min
 UC.ext["L_SPIN"] = 1 / 6 # 10 min
+UC.ext["L_SUPP"] = 1 / 6 # 10 min
 UC.ext["load_scale"] = 1
 UC.ext["solar_scale"] = 1
-UC.ext["storage_scale"] = 15
+UC.ext["storage_scale"] = 1
 UC.ext["solar_reg_prop"] = 1
 UC.ext["solar_spin_prop"] = 1
 UC.ext["wind_reg_prop"] = 1
 UC.ext["wind_spin_prop"] = 1
 UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
+UC.ext["supp_type"] = supp_type
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug

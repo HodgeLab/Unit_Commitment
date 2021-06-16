@@ -80,11 +80,20 @@ function apply_thermal_constraints!(
 
     # Apply CC constraints
     restrictions = problem.ext["cc_restrictions"]
-    cc_constraints = JuMP.@constraint(
-        jump_model,
-        [k in keys(restrictions), t in time_steps],
-        sum(ug[i, t] for i in restrictions[k]) <= 1
-    )
+    if :ng in keys(jump_model.obj_dict)
+        ng = jump_model.obj_dict[:ng]
+        JuMP.@constraint(
+            jump_model,
+            [k in keys(restrictions), j in scenarios, t in time_steps],
+            sum(ug[i, t] + ng[i, j, t] for i in restrictions[k]) <= 1
+        )
+    else
+        cc_constraints = JuMP.@constraint(
+            jump_model,
+            [k in keys(restrictions), t in time_steps],
+            sum(ug[i, t] for i in restrictions[k]) <= 1
+        )
+    end
 
     # Must-run -- added as a constraint for Xpress due to fix not working
     if use_must_run
@@ -493,6 +502,36 @@ function _apply_thermal_scenario_based_constraints!(
             rampdn_constraint_none[g, j, t] =
                 JuMP.@constraint(jump_model, pg[g, j, t - 1] - pg[g, j, t] <= ramp_dn[g])
         end
+    end
+
+    if :supp in keys(jump_model.obj_dict)
+        supp = jump_model.obj_dict[:supp]
+        ng = jump_model.obj_dict[:ng]
+        scenarios = 1:size(supp)[2]
+        L_SUPP = problem.ext["L_SUPP"]
+
+        # Non-spin constraints
+        # Supplemental reserve must exceed minimum power rating
+        JuMP.@constraint(
+            jump_model,
+            [g in thermal_gen_names, j in scenarios, t in time_steps],
+            supp[g, j, t] >= pg_lim[g].min * ng[g, j, t]
+        )
+
+        # Supplemental only as high as portion of start-up it can achieve in 10 minutes
+        JuMP.@constraint(
+            jump_model,
+            [g in thermal_gen_names, j in scenarios, t in time_steps],
+            supp[g, j, t] <= pg_power_trajectory[g].startup * L_SUPP * ng[g, j, t]
+        )
+
+        # Supplemental only as high as unit can ramp in 10 minutes
+        JuMP.@constraint(
+            jump_model,
+            [g in thermal_gen_names, j in scenarios, t in time_steps],
+            supp[g, j, t] <=  L_SUPP * ramp_up[g]
+        )
+
     end
 
     return

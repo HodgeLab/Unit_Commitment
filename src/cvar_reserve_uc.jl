@@ -10,6 +10,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     α = problem.ext["α"]
     C_res_penalty = problem.ext["C_res_penalty"]
     C_ener_penalty = problem.ext["C_ener_penalty"]
+    supp_type = problem.ext["supp_type"]
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
@@ -151,10 +152,32 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
             ] >= 0
         )
     end
-    supp = JuMP.@variable(
-        jump_model,
-        supp[j in scenarios, t in time_steps] >= 0
-    )
+    if supp_type == "nonspin"
+        supp = JuMP.@variable(
+            jump_model,
+            supp[g in thermal_gen_names, j in scenarios, t in time_steps] >= 0
+        )
+        # Non-spinning reserve binary variable. Required because of CC exclusion set;
+        # otherwise could use 1 - ug
+        # Trying for now indexed by j; could change that to just being by g, t
+        ng = JuMP.@variable(
+            jump_model,
+            ng[g in thermal_gen_names, j in scenarios, t in time_steps],
+            binary = true
+        )
+        total_supp = JuMP.@expression(
+            jump_model,
+            [j in scenarios, t in time_steps],
+            sum(supp[g, j, t] for g in thermal_gen_names)
+        )
+        optimization_container.expressions[:total_supp] = total_supp
+    else # generic
+        total_supp = JuMP.@variable(
+            jump_model,
+            total_supp[j in scenarios, t in time_steps] >= 0
+        )
+    end
+
     z = JuMP.@variable(jump_model, z[j in scenarios] >= 0) # Eq (25)
     β = JuMP.@variable(jump_model, β)
     if use_slack
@@ -223,7 +246,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     auxiliary_constraint = JuMP.@constraint(
         jump_model,
         [j in scenarios],
-        z[j] >= sum(supp[j, t] for t in time_steps) - β
+        z[j] >= sum(total_supp[j, t] for t in time_steps) - β
     )
 
     obj_function = JuMP.@objective(

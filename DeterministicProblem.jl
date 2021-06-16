@@ -116,7 +116,7 @@ for initial_time in keys(scenario_plot_dict)
         UC.ext["L_SPIN"] = 1 / 6 # 10 min
         UC.ext["load_scale"] = 1
         UC.ext["solar_scale"] = 1
-        UC.ext["storage_scale"] = 15
+        UC.ext["storage_scale"] = 1
         UC.ext["solar_reg_prop"] = 1
         UC.ext["wind_reg_prop"] = 1
         UC.ext["solar_spin_prop"] = 1

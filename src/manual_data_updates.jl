@@ -19,7 +19,7 @@ function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
         end
     end
 
-    # Overwrite with selected inital on conditions, from running 5/17/2018
+    # Overwrite with initial conditions, tailored by day
     initial_on = CSV.read(initial_cond_file, DataFrame)
     for g in get_components(
         ThermalMultiStart,
