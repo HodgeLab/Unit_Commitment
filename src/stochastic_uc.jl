@@ -53,9 +53,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     reg_reserve_dn =
         PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
     spin_reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "SPIN")
-    reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
-    reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
-    spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
+    # reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
+    # reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
+    # spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
+    reg⁺_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    reg⁻_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    spin_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
 
     # -------------------------------------------------------------
     # Time-series data
@@ -181,6 +184,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         apply_reg_requirements!(problem,
             reg⁺_device_names,
             reg⁻_device_names,
+            required_reg⁺,
+            required_reg⁻,
             storage_reserve_names
         )
     end
@@ -188,6 +193,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
     if use_spin
         apply_spin_requirements!(problem,
             spin_device_names,
+            required_spin,
             storage_reserve_names
         )
     end

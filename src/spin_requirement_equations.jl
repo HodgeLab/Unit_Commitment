@@ -30,7 +30,9 @@ function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
         supp = obj_dict[:supp]
     end
 
-    if use_supp || (use_solar_spin && ndims(spin_S) == 2)
+    if use_supp
+        scenarios = 1:size(supp)[1]
+    elseif (use_solar_spin && ndims(spin_S) == 2)
         scenarios = 1:size(spin_S)[1]
     else
         scenarios = nothing
