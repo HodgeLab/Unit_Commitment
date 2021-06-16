@@ -17,7 +17,8 @@ function apply_solar!(
     case_initial_time = PSI.get_initial_time(problem)
 
     # Populate solar scenarios
-    area = PSY.get_component(Area, system, "1")
+    # Scenarios are for entire ERCOT area, but are hacked in under the FarWest name
+    area = PSY.get_component(Area, system, "FarWest")
     area_solar_forecast_scenarios = permutedims(
         PSY.get_time_series_values(
             Scenarios,

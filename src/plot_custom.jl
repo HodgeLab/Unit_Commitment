@@ -244,7 +244,7 @@ function _get_solar_forecast(
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
 
-    area = PSY.get_component(Area, system, "1")
+    area = PSY.get_component(Area, system, "FarWest")
     scenario_forecast = permutedims(
         PSY.get_time_series_values(
             Scenarios,
