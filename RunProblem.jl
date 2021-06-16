@@ -90,7 +90,12 @@ system_da = System(
     time_series_read_only = true,
 )
 
-apply_manual_data_updates!(system_da, use_nuclear, system_file_path)
+initial_cond_file = joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv")
+if !isfile(initial_cond_file)
+    initial_cond_file = joinpath(system_file_path, "initial_on.csv")
+end
+
+apply_manual_data_updates!(system_da, use_nuclear, initial_cond_file)
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_dauc, RenewableDispatch, RenewableFullDispatch)

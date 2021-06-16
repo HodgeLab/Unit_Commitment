@@ -440,3 +440,15 @@ _missing_power_by_hourly_setpoint = function(
     missing_capacity = DataFrame(transpose(reshape(missing_capacity, (12, length(time_steps)))), :auto)
     CSV.write(joinpath(output_path, "missing_capacity__hourly_setpoint.csv"), missing_capacity)
 end
+
+function save_as_initial_condition(
+        problem::PSI.OperationsProblem{T},
+        fname,
+        hour
+    ) where T
+
+    optimization_container = PSI.get_optimization_container(problem)
+    jump_model = PSI.get_jump_model(optimization_container)
+    ug = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[[hour], :]
+    CSV.write(fname, ug)
+end
