@@ -11,7 +11,7 @@ generated*.md
 
 # Test data
 data/*
-!data/initial_on.csv
+!data/initial_on*
 
 # Simulation Results
 results

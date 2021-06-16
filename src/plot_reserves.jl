@@ -1,11 +1,13 @@
 function plot_reserve(
     problem::PSI.OperationsProblem{T}, 
     reserve_name::String;
-    use_solar_reserves = true,
     kwargs...) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
     title = get(kwargs, :title, reserve_name)
     save_dir = get(kwargs, :save_dir, nothing)
     time_steps = get(kwargs, :time_steps, nothing)
+    use_solar_reg = problem.ext["use_solar_reg"]
+    use_solar_spin = problem.ext["use_solar_spin"]
+    use_wind_reserves = problem.ext["use_wind_reserves"]
 
     p = PG._empty_plot()
     backend = Plots.backend()
@@ -25,18 +27,21 @@ function plot_reserve(
         reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :reg⁺
         if use_slack sym_dict["slack"] = :slack_reg⁺ end
-        if use_solar_reserves sym_dict["solar"] = :reg⁺_S end
-        if :supp⁺ in keys(jump_model.obj_dict) sym_dict["supp"] = :supp⁺ end
+        if use_solar_reg sym_dict["solar"] = :reg⁺_S end
+        if use_wind_reserves sym_dict["wind"] = :reg⁺_W end
     elseif reserve_name == "REG_DN"
         reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, reserve_name)
         sym_dict["reserve"] = :reg⁻
         if use_slack sym_dict["slack"] = :slack_reg⁻ end
-        if use_solar_reserves sym_dict["solar"] = :reg⁻_S end
-        if :supp⁻ in keys(jump_model.obj_dict) sym_dict["supp"] = :supp⁻ end
+        if use_solar_reg sym_dict["solar"] = :reg⁻_S end
+        if use_wind_reserves sym_dict["wind"] = :reg⁻_W end
     elseif reserve_name == "SPIN"
         reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :spin
-        if use_slack sym_dict["slack"] = :spin end
+        if use_solar_spin sym_dict["solar"] = :spin_S end
+        if use_wind_reserves sym_dict["wind"] = :spin_W end
+        if use_slack sym_dict["slack"] = :slack_spin end
+        if :supp in keys(jump_model.obj_dict) sym_dict["supp"] = :supp end
     else
         throw(ArgumentError("Allowable reserve names are REG_UP, REG_DN, or SPIN"))
     end
@@ -72,7 +77,10 @@ function plot_reserve(
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(reserves_agg, backend))
     if "supp" in keys(sym_dict)
-        DataFrames.rename!(reserves_agg, Dict("Imports/Exports" => (reserve_name == "REG_UP" ? "Supp⁺" : "Supp⁻")))
+        DataFrames.rename!(reserves_agg, Dict("Imports/Exports" => "Supp"))
+    end
+    if use_slack
+        DataFrames.rename!(reserves_agg, Dict("Unserved Energy" => "Unserved Reserves"))
     end
     p = plot_dataframe(
         reserves_agg,
@@ -146,6 +154,10 @@ function get_reserve_data(
         end
     end
 
+    if "wind" in keys(sym_dict)
+        variables[sym_dict["wind"]] = PSI.axis_array_to_dataframe(jump_model.obj_dict[sym_dict["wind"]], [sym_dict["wind"]])[time_steps, :]
+    end
+
     if "supp" in keys(sym_dict)
         # Supp is 3D transformed to 2D; select single scenario out
         variables[sym_dict["supp"]] = _scenario_in_3D_array_to_dataframe(
@@ -196,6 +208,9 @@ function my_categorize_reserves(
     end
     if "solar" in keys(sym_dict)
         category_dataframes["PV"] = data[sym_dict["solar"]]
+    end
+    if "wind" in keys(sym_dict)
+        category_dataframes["Wind"] = data[sym_dict["wind"]]
     end
     if "supp" in keys(sym_dict)
         # Hack to match color, will be renamed

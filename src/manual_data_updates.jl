@@ -1,24 +1,10 @@
-function apply_manual_data_updates!(system, use_nuclear, system_file_path)
+function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
     for g in get_components(
         RenewableDispatch,
         system,
         x -> get_prime_mover(x) != PrimeMovers.PVe,
     )
         set_available!(g, true)
-    end
-
-    for g in get_components(HydroGen, system)
-        set_available!(g, true)
-    end
-
-    # Set all CC's to start off
-    for g in get_components(
-        ThermalMultiStart,
-        system,
-        x -> get_prime_mover(x) in [PrimeMovers.CT, PrimeMovers.CC],
-    )
-        set_status!(g, false)
-        set_active_power!(g, 0.0)
     end
 
     if !use_nuclear
@@ -33,8 +19,8 @@ function apply_manual_data_updates!(system, use_nuclear, system_file_path)
         end
     end
 
-    # Overwrite with selected inital on conditions, from running 5/17/2018
-    initial_on = CSV.read(joinpath(system_file_path, "initial_on.csv"), DataFrame)
+    # Overwrite with initial conditions, tailored by day
+    initial_on = CSV.read(initial_cond_file, DataFrame)
     for g in get_components(
         ThermalMultiStart,
         system

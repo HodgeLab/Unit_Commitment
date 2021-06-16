@@ -1,4 +1,4 @@
-# To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true 1000 0.80
+# To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true true true 1000 0.80 generic
 # D for deterministic, S for stochastic, C for CVaR
 
 include("src/Unit_commitment.jl")
@@ -19,15 +19,18 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 formulation = isempty(ARGS) ? "D" : ARGS[1]
-initial_time = isempty(ARGS) ? "2018-05-17T00:00:00" : ARGS[2]
+initial_time = isempty(ARGS) ? "2018-03-15T00:00:00" : ARGS[2]
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[3])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
-use_solar_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[5])
-use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
-use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
-C_RR = isempty(ARGS) ? 10 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
-α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
+use_wind_reserves = isempty(ARGS) ? false : parse(Bool, ARGS[5])
+use_solar_reg = isempty(ARGS) ? false : parse(Bool, ARGS[6])
+use_solar_spin = isempty(ARGS) ? false : parse(Bool, ARGS[7])
+use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[8])
+use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[9])
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[10])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[11]) # Penalty cost of recourse reserve
+α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[12]) # Risk tolerance level
+supp_type = isempty(ARGS) ? "generic" : ARGS[13]
 scenarios = 31
 
 scenario_plot_dict = Dict{String,Vector{Int64}}(
@@ -58,6 +61,7 @@ if formulation == "D"
 elseif formulation == "C"
     formulation_dir = "CVAR"
     custom_problem = CVaRReserveUnitCommitmentCC
+    if !(supp_type in ["generic", "nonspin"]) throw(ArgumentError("Supp reserves must be generic or nonspin")) end
 elseif formulation == "S"
     formulation_dir = "Stochastic"
     custom_problem = StochasticUnitCommitmentCC
@@ -67,7 +71,9 @@ end
 optional_title =
     (use_storage ? " stor" : "") *
     (use_storage_reserves ? " storres" : "") *
-    (use_solar_reserves ? " solres" : "") *
+    (use_wind_reserves ? " windres" : "") *
+    (use_solar_reg ? " solreg" : "") *
+    (use_solar_spin ? " solspin" : "") *
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "")
 
 output_path = "./results/" * string(scenarios) * " scenarios/" * formulation_dir * 
@@ -86,7 +92,12 @@ system_da = System(
     time_series_read_only = true,
 )
 
-apply_manual_data_updates!(system_da, use_nuclear, system_file_path)
+initial_cond_file = joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv")
+if !isfile(initial_cond_file)
+    initial_cond_file = joinpath(system_file_path, "initial_on.csv")
+end
+
+apply_manual_data_updates!(system_da, use_nuclear, initial_cond_file)
 
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_dauc, RenewableDispatch, RenewableFullDispatch)
@@ -106,14 +117,16 @@ UC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = true,
-    balance_slack_variables = false,
+    balance_slack_variables = true,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
 UC.ext["storage_reserve_names"] = ["EXPOSE_STORAGE"]
-UC.ext["use_solar_reserves"] = use_solar_reserves
+UC.ext["use_wind_reserves"] = use_wind_reserves
+UC.ext["use_solar_reg"] = use_solar_reg
+UC.ext["use_solar_spin"] = use_solar_spin
 UC.ext["use_reg"] = true
 UC.ext["use_spin"] = use_spin
 UC.ext["use_must_run"] = use_must_run
@@ -123,9 +136,18 @@ UC.ext["C_res_penalty"] = 5000 * get_base_power(system_da)
 UC.ext["C_ener_penalty"] = 9000 * get_base_power(system_da)
 UC.ext["L_REG"] = 1 / 12 # 5 min
 UC.ext["L_SPIN"] = 1 / 6 # 10 min
-UC.ext["load_scale"] = 1.15
+UC.ext["L_SUPP"] = 1 / 6 # 10 min
+UC.ext["load_scale"] = 1
 UC.ext["solar_scale"] = 1
-UC.ext["storage_scale"] = 15
+UC.ext["storage_scale"] = 1
+UC.ext["solar_reg_prop"] = 1
+UC.ext["solar_spin_prop"] = 1
+UC.ext["wind_reg_prop"] = 1
+UC.ext["wind_spin_prop"] = 1
+UC.ext["renewable_reg_prop"] = 1
+UC.ext["renewable_spin_prop"] = 1
+UC.ext["supp_type"] = supp_type
+UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
@@ -139,15 +161,15 @@ if status.value == 0
         time=solvetime
     )
 
-    ha_file = joinpath(system_file_path, "HA_sys.json")
-    if isfile(ha_file)
-        system_ha = System(ha_file; time_series_read_only = true)
-        write_missing_power(
-            problem,
-            system_ha,
-            system_file_path,
-            output_path)
-    end
+    # ha_file = joinpath(system_file_path, "HA_sys.json")
+    # if isfile(ha_file)
+    #     system_ha = System(ha_file; time_series_read_only = true)
+    #     write_missing_power(
+    #         problem,
+    #         system_ha,
+    #         system_file_path,
+    #         output_path)
+    # end
 
     for scenario in 1:(formulation == "D" ? 1 : plot_scenarios)
         plot_fuel(
@@ -157,27 +179,25 @@ if status.value == 0
         )
 
         plot_reserve(
-                UC,
-                "REG_UP";
-                use_solar_reserves = use_solar_reserves,
-                save_dir = output_path,
-                scenario = (formulation == "D" ? nothing : scenario)
-            )
-
-            plot_reserve(
-                UC,
-                "REG_DN";
-                use_solar_reserves = use_solar_reserves,
-                save_dir = output_path,
-                scenario = (formulation == "D" ? nothing : scenario)
-            )
+            UC,
+            "SPIN";
+            save_dir = output_path,
+            scenario = (formulation == "D" ? nothing : scenario)
+        )
     end
 
     plot_reserve(
         UC,
-        "SPIN";
-        use_solar_reserves = use_solar_reserves,
+        "REG_UP";
         save_dir = output_path,
         scenario = nothing
     )
+
+    plot_reserve(
+        UC,
+        "REG_DN";
+        save_dir = output_path,
+        scenario = nothing
+    )
+
 end

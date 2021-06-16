@@ -3,8 +3,10 @@ function apply_storage!(problem::PSI.OperationsProblem{T},
     storage_reserve_names::Vector{String}
     ) where T
     use_storage_reserves = problem.ext["use_storage_reserves"]
-    use_reg = problem.ext["use_reg"]
+    use_reg = false # Hack for now to ignore storage for reg
+    use_spin = problem.ext["use_spin"]
     L_REG = problem.ext["L_REG"]
+    L_SPIN = problem.ext["L_SPIN"]
 
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)
@@ -63,6 +65,7 @@ function apply_storage!(problem::PSI.OperationsProblem{T},
     # Get pre-registered Variables
     reg⁺ = jump_model.obj_dict[:reg⁺]
     reg⁻ = jump_model.obj_dict[:reg⁻]
+    spin = jump_model.obj_dict[:spin]
 
     # Storage charge/discharge decisions
     storage_charge_constraints = JuMP.@constraint(
@@ -103,7 +106,8 @@ function apply_storage!(problem::PSI.OperationsProblem{T},
             jump_model,
             [b in storage_reserve_names, t in time_steps],
             η[b].out * (eb[b, t] - eb_lim[b].min) >=
-            (use_reg ? L_REG * reg⁺[b, t] : 0)
+            (use_reg ? L_REG * reg⁺[b, t] : 0) +
+            (use_spin ? L_SPIN * spin[b, t] : 0)
         )
         if use_reg
             storage_⁻_response_constraints = JuMP.@constraint(
@@ -117,7 +121,8 @@ function apply_storage!(problem::PSI.OperationsProblem{T},
         storage_⁺_reserve_constraints = JuMP.@constraint(
             jump_model,
             [b in storage_reserve_names, t in time_steps],
-            (use_reg ? reg⁺[b, t] : 0) <=
+            (use_reg ? reg⁺[b, t] : 0) +
+            (use_spin ? spin[b, t] : 0) <=
             pb_out_max[b] - pb_out[b, t] + pb_in[b, t]
         )
         if use_reg
