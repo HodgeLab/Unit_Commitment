@@ -1,3 +1,4 @@
+# Placeholder change -- for Jose to add stage 2 framework
 # To run: julia --project RunProblem.jl D 2018-05-17T00:00:00 true true true true true true true true 1000 0.80 generic
 # D for deterministic, S for stochastic, C for CVaR
 
