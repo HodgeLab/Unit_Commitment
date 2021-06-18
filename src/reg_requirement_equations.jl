@@ -21,6 +21,8 @@ function apply_reg_requirements!(
     obj_dict = jump_model.obj_dict
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
+    # These also need registration in the optimization Containers
+
     reg⁺ = obj_dict[:reg⁺]
     reg⁻ = obj_dict[:reg⁻]
     if use_solar_reg
