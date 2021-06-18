@@ -5,6 +5,7 @@ function apply_solar!(
     required_reg⁻::Vector{Float64},
     required_spin::Vector{Float64}
     ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    use_spin = problem.ext["use_spin"]
     use_solar_reg = problem.ext["use_solar_reg"]
     use_solar_spin = problem.ext["use_solar_spin"]
     use_reg = problem.ext["use_reg"]
@@ -89,6 +90,7 @@ function apply_solar!(
     use_solar_reg = problem.ext["use_solar_reg"]
     use_reg = problem.ext["use_reg"]
     solar_scale = problem.ext["solar_scale"]
+    use_spin = problem.ext["use_spin"]
 
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)

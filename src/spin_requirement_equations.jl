@@ -7,7 +7,6 @@ function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
     use_solar_spin = problem.ext["use_solar_spin"]
     use_storage_reserves = problem.ext["use_storage_reserves"]
     use_wind_reserves = problem.ext["use_wind_reserves"]
-    supp_type = problem.ext["supp_type"]
 
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)
@@ -28,7 +27,7 @@ function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
     end
 
     if use_supp
-        if supp_type == "generic"
+        if problem.ext["supp_type"] == "generic"
             total_supp = obj_dict[:total_supp]
         else
             total_supp = optimization_container.expressions[:total_supp]

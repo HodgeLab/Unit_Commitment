@@ -13,8 +13,6 @@ function apply_wind!(
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     obj_dict = jump_model.obj_dict
-    system = PSI.get_system(problem)
-    case_initial_time = PSI.get_initial_time(problem)
 
     pW = obj_dict[:pW]
     if use_reg && use_wind_reserves

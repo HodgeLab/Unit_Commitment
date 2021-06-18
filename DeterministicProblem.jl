@@ -19,12 +19,10 @@ solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPR
 
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])
-use_wind_reserves = isempty(ARGS) ? false : parse(Bool, ARGS[3])
-use_solar_reg = isempty(ARGS) ? false : parse(Bool, ARGS[4])
-use_solar_spin = isempty(ARGS) ? false : parse(Bool, ARGS[5])
-use_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
-use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
-use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
+use_solar_reg = isempty(ARGS) ? true : parse(Bool, ARGS[3])
+use_solar_spin = isempty(ARGS) ? true : parse(Bool, ARGS[4])
+use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[5])
+use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 scenarios = 31
 
 ## Jose
@@ -54,7 +52,6 @@ set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitm
 optional_title =
     (use_storage ? " stor" : "") *
     (use_storage_reserves ? " storres" : "") *
-    (use_wind_reserves ? " windres" : "") *
     (use_solar_reg ? " solreg" : "") *
     (use_solar_spin ? " solspin" : "")
 
@@ -88,7 +85,7 @@ for initial_time in keys(scenario_plot_dict)
         #     mkpath(output_path)
         # end
 
-        apply_manual_data_updates!(system_da, use_nuclear, joinpath(system_file_path, "initial_on.csv"))
+        apply_manual_data_updates!(system_da, use_nuclear, joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv"))
 
         UC = OperationsProblem(
             BasecaseUnitCommitmentCC,
@@ -104,11 +101,11 @@ for initial_time in keys(scenario_plot_dict)
         UC.ext["use_storage"] = use_storage
         UC.ext["use_storage_reserves"] = use_storage_reserves
         UC.ext["storage_reserve_names"] = ["EXPOSE_STORAGE"]
-        UC.ext["use_wind_reserves"] = use_wind_reserves
+        UC.ext["use_wind_reserves"] = false
         UC.ext["use_solar_reg"] = use_solar_reg
         UC.ext["use_solar_spin"] = use_solar_spin
         UC.ext["use_reg"] = true
-        UC.ext["use_spin"] = use_spin
+        UC.ext["use_spin"] = true
         UC.ext["use_must_run"] = use_must_run
         UC.ext["C_res_penalty"] = 5000 * get_base_power(system_da)
         UC.ext["C_ener_penalty"] = 9000 * get_base_power(system_da)
@@ -123,6 +120,7 @@ for initial_time in keys(scenario_plot_dict)
         UC.ext["wind_spin_prop"] = 1
         UC.ext["renewable_reg_prop"] = 1
         UC.ext["renewable_spin_prop"] = 1
+        UC.ext["supp_type"] = "generic"
         UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
 
         # Build and solve the standalone problem
@@ -131,6 +129,7 @@ for initial_time in keys(scenario_plot_dict)
 
         if status.value == 0
             hour = 3
+            print(initial_time * " solved")
             save_as_initial_condition(UC,
                 joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv"),
                 hour
