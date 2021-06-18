@@ -1,13 +1,15 @@
 include("Unit_commitment.jl")
+using PowerSimulations
+using PowerSystems
 
 # plotlyjs()
 
 ## Local
-using Xpress
-solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+# using Xpress
+# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
 ## Eagle
-# using Gurobi
-# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+using Gurobi
+solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
 
 ############################## First Stage Problem Definition ##############################
 formulation = isempty(ARGS) ? "D" : ARGS[1]
@@ -83,16 +85,15 @@ if !isdir(output_path)
 end
 
 ## Jose
-# system_file_path = "/Users/jdlara/cache/blue_texas/"
+system_file_path = "/Users/jdlara/Dropbox/texas_data"
 ## Kate
-system_file_path = "data/"
+# system_file_path = "data/"
 
 system_da = System(
     joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
     time_series_read_only = true,
 )
 
-system_ha
 
 initial_cond_file =
     joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv")
@@ -180,27 +181,34 @@ HAUC = OperationsProblem(
 
 #################################### Simulation Definition ################################
 
-Problems = SimulationProblems(
+problems = SimulationProblems(
     DAUC = DAUC, HAUC = HAUC,
 )
 
 sequence = SimulationSequence(
+# Synchronize means that the decisions from one hour are synchronized with the
+# with the lower stage ones.
 feedforward_chronologies = Dict(("DAUC" => "HAUC") => Synchronize(periods = 24)),
+    # Defines how often a problem solves. I.e., the time diference between initial conditions
         intervals = Dict(
             "DAUC" => (Hour(24), Consecutive()),
             "HAUC" => (Hour(24), Consecutive()),
         ),
+        # How one stage "sends" variables to the next stage
         feedforward = Dict(
+            # This sends the UC decisions down to the ED problem
             ("DAUC", :devices, :Generators) => SemiContinuousFF(
                 binary_source_problem = PSI.ON,
                 affected_variables = [PSI.ACTIVE_POWER],
             ),
+            # This fixes the Reserve Variables
             ("DAUC", :services, :Generators) => RangeFF(
                 variable_source_problem_ub = PSI.ON,
                 variable_source_problem_lb = PSI.ON,
                 affected_variables = [PSI.ACTIVE_POWER],
             ),
         ),
+        # How the stage initializes
         ini_cond_chronology = InterProblemChronology(),
 )
 
