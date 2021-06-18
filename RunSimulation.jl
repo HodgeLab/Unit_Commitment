@@ -113,7 +113,7 @@ set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
 
-DAUC = OperationsProblem(
+UC = OperationsProblem(
     custom_problem,
     template_dauc,
     system_da,
@@ -181,7 +181,7 @@ HAUC = OperationsProblem(
 #################################### Simulation Definition ################################
 
 problems = SimulationProblems(
-    DAUC = DAUC, HAUC = HAUC,
+    DAUC = UC, HAUC = HAUC,
 )
 
 sequence = SimulationSequence(
