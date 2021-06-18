@@ -93,7 +93,6 @@ system_da = System(
     time_series_read_only = true,
 )
 
-
 initial_cond_file =
     joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv")
 if !isfile(initial_cond_file)
@@ -153,7 +152,7 @@ UC.ext["supp_type"] = supp_type
 UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
 
 #################################### Stage 2 problem Definition, ED ########################
-system_da = System(
+system_ha = System(
     joinpath(system_file_path, "HA_sys_UC_experiment.json");
     time_series_read_only = true,
 )
@@ -180,43 +179,41 @@ HAUC = OperationsProblem(
 
 #################################### Simulation Definition ################################
 
-problems = SimulationProblems(
-    DAUC = UC, HAUC = HAUC,
-)
+problems = SimulationProblems(DAUC = UC, HAUC = HAUC)
 
 sequence = SimulationSequence(
-# Synchronize means that the decisions from one hour are synchronized with the
-# with the lower stage ones.
-feedforward_chronologies = Dict(("DAUC" => "HAUC") => Synchronize(periods = 24)),
+    # Synchronize means that the decisions from one hour are synchronized with the
+    # with the lower stage ones.
+    feedforward_chronologies = Dict(("DAUC" => "HAUC") => Synchronize(periods = 24)),
     # Defines how often a problem solves. I.e., the time diference between initial conditions
-        intervals = Dict(
-            "DAUC" => (Hour(24), Consecutive()),
-            "HAUC" => (Hour(24), Consecutive()),
+    intervals = Dict(
+        "DAUC" => (Hour(24), Consecutive()),
+        "HAUC" => (Hour(24), Consecutive()),
+    ),
+    # How one stage "sends" variables to the next stage
+    feedforward = Dict(
+        # This sends the UC decisions down to the ED problem
+        ("DAUC", :devices, :Generators) => SemiContinuousFF(
+            binary_source_problem = PSI.ON,
+            affected_variables = [PSI.ACTIVE_POWER],
         ),
-        # How one stage "sends" variables to the next stage
-        feedforward = Dict(
-            # This sends the UC decisions down to the ED problem
-            ("DAUC", :devices, :Generators) => SemiContinuousFF(
-                binary_source_problem = PSI.ON,
-                affected_variables = [PSI.ACTIVE_POWER],
-            ),
-            # This fixes the Reserve Variables
-            ("DAUC", :services, :Generators) => RangeFF(
-                variable_source_problem_ub = PSI.ON,
-                variable_source_problem_lb = PSI.ON,
-                affected_variables = [PSI.ACTIVE_POWER],
-            ),
+        # This fixes the Reserve Variables
+        ("DAUC", :services, :Generators) => RangeFF(
+            variable_source_problem_ub = PSI.ON,
+            variable_source_problem_lb = PSI.ON,
+            affected_variables = [PSI.ACTIVE_POWER],
         ),
-        # How the stage initializes
-        ini_cond_chronology = InterProblemChronology(),
+    ),
+    # How the stage initializes
+    ini_cond_chronology = IntraProblemChronology(),
 )
 
 sim = Simulation(
-name = "SimVersion1",
-steps = 1,
-problems = problems,
-sequence = sequence,
-simulation_folder = mktempdir(cleanup = true),
+    name = "SimVersion1",
+    steps = 1,
+    problems = problems,
+    sequence = sequence,
+    simulation_folder = mktempdir(cleanup = true),
 )
 
 build_out = build!(sim)

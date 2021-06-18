@@ -3,11 +3,13 @@ function get_area_total_time_series(
     problem::PSI.OperationsProblem{T},
     type::DataType;
     filter = nothing,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+    },
+}
     system = PSI.get_system(problem)
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
@@ -37,11 +39,13 @@ function get_thermal_generator_power_dataframe(
     problem::PSI.OperationsProblem{T},
     time_steps::UnitRange{Int64},
     scenario,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
@@ -72,11 +76,13 @@ function PSI.write_to_CSV(
     data_path::String,
     output_path::String;
     time = nothing,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+    },
+}
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
     exclusions = [:λ, :β] # PWL chunks, expensive to export and useless
@@ -325,11 +331,13 @@ function write_missing_power(
     system_ha::PSY.System,
     data_path::String,
     output_path::String,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
@@ -415,11 +423,13 @@ _missing_power_by_5_min = function (
     total_thermal_online::Vector{Float64},
     data_path::String,
     output_path::String,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     case_initial_time = PSI.get_initial_time(problem)
     optimization_container = PSI.get_optimization_container(problem)
     time_steps = PSI.model_time_steps(optimization_container)
@@ -502,11 +512,13 @@ _missing_power_by_hourly_setpoint = function (
     total_thermal_online::Vector{Float64},
     data_path::String,
     output_path::String,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)

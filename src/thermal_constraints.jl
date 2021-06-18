@@ -2,11 +2,13 @@
 function apply_thermal_constraints!(
     problem::PSI.OperationsProblem{T},
     spin_device_names::Vector{String},
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]

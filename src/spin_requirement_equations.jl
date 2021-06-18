@@ -4,11 +4,13 @@ function apply_spin_requirements!(
     spin_device_names::Vector{String},
     required_spin::Vector{Float64},
     storage_reserve_names::Vector{String},
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     use_solar_spin = problem.ext["use_solar_spin"]
     use_storage_reserves = problem.ext["use_storage_reserves"]
     use_wind_reserves = problem.ext["use_wind_reserves"]

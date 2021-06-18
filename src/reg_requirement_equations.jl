@@ -6,11 +6,13 @@ function apply_reg_requirements!(
     required_reg⁺::Vector{Float64},
     required_reg⁻::Vector{Float64},
     storage_reserve_names::Vector{String},
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     use_solar_reg = problem.ext["use_solar_reg"]
     use_wind_reserves = problem.ext["use_wind_reserves"]
     use_storage_reserves = false # Hack to overwrite storage reg reserves for now
