@@ -175,10 +175,10 @@ if status.value == 0
     #         output_path)
     # end
 
-    for scenario in 1:(formulation == "D" ? 1 : plot_scenarios)
+    for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
         plot_fuel(
             UC;
-            scenario = (formulation == "D" ? nothing : scenario),
+            scenario = scenario,
             save_dir = output_path,
         )
 
@@ -186,11 +186,20 @@ if status.value == 0
             UC,
             "SPIN";
             save_dir = output_path,
-            scenario = (formulation == "D" ? nothing : scenario),
+            scenario = scenario,
         )
+
+        plot_reserve(
+            UC,
+            "REG_UP";
+            save_dir = output_path,
+            scenario = scenario)
+
+        plot_reserve(
+            UC,
+            "REG_DN";
+            save_dir = output_path,
+            scenario = scenario)
     end
 
-    plot_reserve(UC, "REG_UP"; save_dir = output_path, scenario = nothing)
-
-    plot_reserve(UC, "REG_DN"; save_dir = output_path, scenario = nothing)
 end
