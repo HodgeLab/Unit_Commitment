@@ -21,7 +21,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     # Hack to reset the internal JuMP model during development. Do not remove.
-    problem.internal.optimization_container.JuMPmodel = nothing
+    problem.internal.optimization_container.JuMPmodel = JuMP.Model()
     PSI.optimization_container_init!(
         optimization_container,
         PSI.CopperPlatePowerModel,
