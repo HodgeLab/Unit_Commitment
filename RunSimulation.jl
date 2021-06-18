@@ -1,7 +1,4 @@
 include("src/Unit_commitment.jl")
-# plotlyjs()
-using PowerSimulations
-using PowerSystems
 
 ## Local
 # using Xpress
@@ -182,6 +179,7 @@ HAUC = OperationsProblem(
 problems = SimulationProblems(DAUC = UC, HAUC = HAUC)
 
 sequence = SimulationSequence(
+    problems = problems,
     # Synchronize means that the decisions from one hour are synchronized with the
     # with the lower stage ones.
     feedforward_chronologies = Dict(("DAUC" => "HAUC") => Synchronize(periods = 24)),
