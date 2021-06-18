@@ -2,11 +2,13 @@
 function apply_thermal_constraints!(
     problem::PSI.OperationsProblem{T},
     spin_device_names::Vector{String},
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]
@@ -64,6 +66,7 @@ function apply_thermal_constraints!(
     # Collect variables
     # ------------------------------------------------
     pg = jump_model.obj_dict[:pg]
+    # Needs to be registered in the optimization container
     ug = jump_model.obj_dict[:ug]
     wg = jump_model.obj_dict[:wg]
     vg = jump_model.obj_dict[:vg]
@@ -336,7 +339,7 @@ function _apply_thermal_scenario_based_constraints!(
         max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
     )
 
-    # Limits on downward reserves 
+    # Limits on downward reserves
     reservedn_constraint_reg = JuMP.@constraint(
         jump_model,
         [g in thermal_gen_names, j in scenarios, t in time_steps],
@@ -531,7 +534,7 @@ function _apply_thermal_scenario_based_constraints!(
         max(0, (pg_lim[g].max - pg_power_trajectory[g].startup)) * vg[g, t]
     )
 
-    # Limits on downward reserves 
+    # Limits on downward reserves
     if use_reg
         reservedn_constraint_reg = JuMP.@constraint(
             jump_model,

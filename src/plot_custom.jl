@@ -1,11 +1,13 @@
 function PG.plot_fuel(
     problem::PSI.OperationsProblem{T};
     kwargs...,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+    },
+}
     title = get(kwargs, :title, "Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
     scenario = kwargs[:scenario]
@@ -130,11 +132,13 @@ function PG.get_generation_data(
     solar_forecast,
     time_steps;
     kwargs...,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+    },
+}
     storage = problem.ext["use_storage"]
     use_slack =
         PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)

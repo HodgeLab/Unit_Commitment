@@ -2,11 +2,13 @@ function plot_reserve(
     problem::PSI.OperationsProblem{T},
     reserve_name::String;
     kwargs...,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+    },
+}
     title = get(kwargs, :title, reserve_name)
     save_dir = get(kwargs, :save_dir, nothing)
     time_steps = get(kwargs, :time_steps, nothing)
@@ -160,11 +162,13 @@ function get_reserve_data(
     sym_dict::Dict,
     time_steps::UnitRange{Int64};
     kwargs...,
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+    },
+}
     scenario = kwargs[:scenario]
 
     system = PSI.get_system(problem)
