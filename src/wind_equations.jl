@@ -4,11 +4,13 @@ function apply_wind!(
     required_reg⁺::Vector{Float64},
     required_reg⁻::Vector{Float64},
     required_spin::Vector{Float64},
-) where {T <: Union{
-    CVaRReserveUnitCommitmentCC,
-    StochasticUnitCommitmentCC,
-    BasecaseUnitCommitmentCC,
-}}
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+    },
+}
     use_wind_reserves = problem.ext["use_wind_reserves"]
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
