@@ -1,8 +1,12 @@
 
 function apply_thermal_constraints!(
-        problem::PSI.OperationsProblem{T},
-        spin_device_names::Vector{String}
-    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    problem::PSI.OperationsProblem{T},
+    spin_device_names::Vector{String},
+) where {T <: Union{
+    CVaRReserveUnitCommitmentCC,
+    StochasticUnitCommitmentCC,
+    BasecaseUnitCommitmentCC,
+}}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
     use_must_run = problem.ext["use_must_run"]
@@ -245,23 +249,18 @@ function apply_thermal_constraints!(
         total_reserve⁻[g, t] <= pg_lim[g].max * allowable_reserve_prop
     )
 
-    _apply_thermal_scenario_based_constraints!(problem,
-        pg_lim,
-        ramp_up,
-        ramp_dn,
-        ug_t0)
+    _apply_thermal_scenario_based_constraints!(problem, pg_lim, ramp_up, ramp_dn, ug_t0)
 
     return
 end
 
-
 function _apply_thermal_scenario_based_constraints!(
-        problem::PSI.OperationsProblem{T},
-        pg_lim::Dict{},
-        ramp_up::Dict{},
-        ramp_dn::Dict{},
-        ug_t0::Dict{}
-    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    problem::PSI.OperationsProblem{T},
+    pg_lim::Dict{},
+    ramp_up::Dict{},
+    ramp_dn::Dict{},
+    ug_t0::Dict{},
+) where {T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
 
@@ -298,7 +297,12 @@ function _apply_thermal_scenario_based_constraints!(
     λ = JuMP.@variable(
         jump_model,
         0 <=
-        λ[g in thermal_gen_names, j in scenarios, i in 1:length(variable_cost[g]), t in time_steps] <=
+        λ[
+            g in thermal_gen_names,
+            j in scenarios,
+            i in 1:length(variable_cost[g]),
+            t in time_steps,
+        ] <=
         PSY.get_breakpoint_upperbounds(variable_cost[g])[i]
     )
     total_reserve⁺ = optimization_container.expressions[:total_reserve⁺]
@@ -345,7 +349,15 @@ function _apply_thermal_scenario_based_constraints!(
         [g in thermal_gen_names, j in scenarios, t in time_steps[1:(end - 1)]],
         pg[g, j, t] + total_reserve⁺[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-        max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
+        max(
+            0,
+            (
+                pg_lim[g].max - (
+                    pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max :
+                    pg_power_trajectory[g].shutdown
+                )
+            ),
+        ) * wg[g, t + 1]
         # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
     )
     # Initial condition ignores t0 reserves, is same for all reserve groups. pg_lib (10)
@@ -355,7 +367,15 @@ function _apply_thermal_scenario_based_constraints!(
         [g in thermal_gen_names],
         ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
         (pg_lim[g].max - pg_lim[g].min) * ug_t0[g] -
-        max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, 1]
+        max(
+            0,
+            (
+                pg_lim[g].max - (
+                    pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max :
+                    pg_power_trajectory[g].shutdown
+                )
+            ),
+        ) * wg[g, 1]
         # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, 1]
     )
 
@@ -370,8 +390,8 @@ function _apply_thermal_scenario_based_constraints!(
         if t == 1  # pg_lib (8)
             rampup_constraint[g, j, 1] = JuMP.@constraint(
                 jump_model,
-                pg[g, j, 1] + total_reserve⁺[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
-                ramp_up[g]
+                pg[g, j, 1] + total_reserve⁺[g, 1] -
+                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
             )
         else
             rampup_constraint[g, j, t] = JuMP.@constraint(
@@ -392,8 +412,8 @@ function _apply_thermal_scenario_based_constraints!(
         if t == 1  # pg_lib (9)
             rampdn_constraint[g, j, 1] = JuMP.@constraint(
                 jump_model,
-                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, j, 1] - total_reserve⁻[g, 1] <=
-                ramp_dn[g]
+                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, j, 1] -
+                total_reserve⁻[g, 1] <= ramp_dn[g]
             )
         else
             rampdn_constraint[g, j, t] = JuMP.@constraint(
@@ -428,21 +448,20 @@ function _apply_thermal_scenario_based_constraints!(
         JuMP.@constraint(
             jump_model,
             [g in thermal_gen_names, j in scenarios, t in time_steps],
-            supp[g, j, t] <=  L_SUPP * ramp_up[g]
+            supp[g, j, t] <= L_SUPP * ramp_up[g]
         )
-
     end
 
     return
 end
 
 function _apply_thermal_scenario_based_constraints!(
-        problem::PSI.OperationsProblem{T},
-        pg_lim::Dict{},
-        ramp_up::Dict{},
-        ramp_dn::Dict{},
-        ug_t0::Dict{}
-    ) where T <: BasecaseUnitCommitmentCC
+    problem::PSI.OperationsProblem{T},
+    pg_lim::Dict{},
+    ramp_up::Dict{},
+    ramp_dn::Dict{},
+    ug_t0::Dict{},
+) where {T <: BasecaseUnitCommitmentCC}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
 
@@ -527,7 +546,15 @@ function _apply_thermal_scenario_based_constraints!(
         [g in thermal_gen_names, t in time_steps[1:(end - 1)]],
         pg[g, t] + total_reserve⁺[g, t] <=
         (pg_lim[g].max - pg_lim[g].min) * ug[g, t] -
-        max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, t + 1]
+        max(
+            0,
+            (
+                pg_lim[g].max - (
+                    pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max :
+                    pg_power_trajectory[g].shutdown
+                )
+            ),
+        ) * wg[g, t + 1]
         # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, t + 1]
     )
     # Initial condition ignores t0 reserves, is same for all reserve groups. pg_lib (10)
@@ -536,7 +563,15 @@ function _apply_thermal_scenario_based_constraints!(
         [g in thermal_gen_names],
         ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <=
         (pg_lim[g].max - pg_lim[g].min) * ug_t0[g] -
-        max(0, (pg_lim[g].max - (pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max : pg_power_trajectory[g].shutdown))) * wg[g, 1]
+        max(
+            0,
+            (
+                pg_lim[g].max - (
+                    pg_power_trajectory[g].shutdown <= pg_lim[g].min ? pg_lim[g].max :
+                    pg_power_trajectory[g].shutdown
+                )
+            ),
+        ) * wg[g, 1]
         # max(0, (pg_lim[g].max - pg_power_trajectory[g].shutdown)) * wg[g, 1]
     )
 
@@ -550,8 +585,7 @@ function _apply_thermal_scenario_based_constraints!(
         if t == 1  # pg_lib (8)
             rampup_constraint[g, 1] = JuMP.@constraint(
                 jump_model,
-                pg[g, 1] + total_reserve⁺[g, 1] -
-                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
+                pg[g, 1] + total_reserve⁺[g, 1] - ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) <= ramp_up[g]
             )
         else
             rampup_constraint[g, t] = JuMP.@constraint(
@@ -571,8 +605,7 @@ function _apply_thermal_scenario_based_constraints!(
         if t == 1  # pg_lib (9)
             rampdn_constraint[g, 1] = JuMP.@constraint(
                 jump_model,
-                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - total_reserve⁻[g, 1] <=
-                ramp_dn[g]
+                ug_t0[g] * (Pg_t0[g] - pg_lim[g].min) - pg[g, 1] - total_reserve⁻[g, 1] <= ramp_dn[g]
             )
         else
             rampdn_constraint[g, t] = JuMP.@constraint(

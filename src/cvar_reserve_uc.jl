@@ -58,9 +58,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     # reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
     # reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
     # spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
-    reg⁺_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
-    reg⁻_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
-    spin_device_names = get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    reg⁺_device_names =
+        get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    reg⁻_device_names =
+        get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    spin_device_names =
+        get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
 
     # -------------------------------------------------------------
     # Time-series data
@@ -88,11 +91,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     total_hydro = get_area_total_time_series(problem, HydroGen)
 
     # Begin with solar equations
-    apply_solar!(problem,
-        required_reg⁺,
-        required_reg⁻,
-        required_spin
-    )
+    apply_solar!(problem, required_reg⁺, required_reg⁻, required_spin)
     pS = jump_model.obj_dict[:pS]
     scenarios = 1:size(pS)[1]
 
@@ -119,34 +118,32 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
         δ_sg[g in thermal_gen_names, s in startup_categories, t in time_steps],
         binary = true
     )
-    pg = JuMP.@variable(jump_model, pg[g in thermal_gen_names, j in scenarios, t in time_steps] >= 0) # power ABOVE MINIMUM
+    pg = JuMP.@variable(
+        jump_model,
+        pg[g in thermal_gen_names, j in scenarios, t in time_steps] >= 0
+    ) # power ABOVE MINIMUM
     pW = JuMP.@variable(jump_model, pW[t in time_steps] >= 0)
     if use_reg
-        reg⁺ = JuMP.@variable(
-            jump_model,
-            reg⁺[
-                # g in (use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
-                #         reg⁺_device_names),
-                g in reg⁺_device_names,
-                t in time_steps,
-            ] >= 0
-        )
-        reg⁻ = JuMP.@variable(
-            jump_model,
-            reg⁻[
-                # g in (use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
-                #         reg⁻_device_names),
-                g in reg⁻_device_names,
-                t in time_steps,
-            ] >= 0
-        )
+        reg⁺ = JuMP.@variable(jump_model, reg⁺[
+            # g in (use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
+            #         reg⁺_device_names),
+            g in reg⁺_device_names,
+            t in time_steps,
+        ] >= 0)
+        reg⁻ = JuMP.@variable(jump_model, reg⁻[
+            # g in (use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
+            #         reg⁻_device_names),
+            g in reg⁻_device_names,
+            t in time_steps,
+        ] >= 0)
     end
     if use_spin
         spin = JuMP.@variable(
             jump_model,
             spin[
-                g in (use_storage_reserves ? union(spin_device_names, storage_reserve_names) :
-                    spin_device_names),
+                g in (use_storage_reserves ?
+                      union(spin_device_names, storage_reserve_names) :
+                      spin_device_names),
                 t in time_steps,
             ] >= 0
         )
@@ -186,10 +183,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
         )
         optimization_container.expressions[:total_supp] = total_supp
     else # generic
-        total_supp = JuMP.@variable(
-            jump_model,
-            total_supp[j in scenarios, t in time_steps] >= 0
-        )
+        total_supp =
+            JuMP.@variable(jump_model, total_supp[j in scenarios, t in time_steps] >= 0)
     end
 
     z = JuMP.@variable(jump_model, z[j in scenarios] >= 0) # Eq (25)
@@ -206,15 +201,9 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     # Constraints
     # -------------------------------------------------------------
 
-    apply_wind!(problem,
-        required_reg⁺,
-        required_reg⁻,
-        required_spin
-    )
+    apply_wind!(problem, required_reg⁺, required_reg⁻, required_spin)
 
-    apply_thermal_constraints!(problem,
-        spin_device_names
-    )
+    apply_thermal_constraints!(problem, spin_device_names)
     Cg = optimization_container.expressions[:Cg]
 
     if use_storage
@@ -224,20 +213,22 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     end
 
     if use_reg
-        apply_reg_requirements!(problem,
+        apply_reg_requirements!(
+            problem,
             reg⁺_device_names,
             reg⁻_device_names,
             required_reg⁺,
             required_reg⁻,
-            storage_reserve_names
+            storage_reserve_names,
         )
     end
 
     if use_spin
-        apply_spin_requirements!(problem,
+        apply_spin_requirements!(
+            problem,
             spin_device_names,
             required_spin,
-            storage_reserve_names
+            storage_reserve_names,
         )
     end
 
@@ -247,7 +238,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
         [j in scenarios, t in time_steps],
         sum(pg[g, j, t] + pg_lim[g].min * ug[g, t] for g in thermal_gen_names) +
         pS[j, t] +
-        pW[t] + 
+        pW[t] +
         total_hydro[t] +
         (use_slack ? slack_energy⁺[t] : 0) +
         (use_storage ? sum(pb_out[b, t] - pb_in[b, t] for b in storage_names) : 0) ==

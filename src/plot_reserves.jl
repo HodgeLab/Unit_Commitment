@@ -1,7 +1,12 @@
 function plot_reserve(
-    problem::PSI.OperationsProblem{T}, 
+    problem::PSI.OperationsProblem{T},
     reserve_name::String;
-    kwargs...) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+    kwargs...,
+) where {T <: Union{
+    CVaRReserveUnitCommitmentCC,
+    BasecaseUnitCommitmentCC,
+    StochasticUnitCommitmentCC,
+}}
     title = get(kwargs, :title, reserve_name)
     save_dir = get(kwargs, :save_dir, nothing)
     time_steps = get(kwargs, :time_steps, nothing)
@@ -19,29 +24,53 @@ function plot_reserve(
     if isnothing(time_steps)
         time_steps = PSI.model_time_steps(optimization_container)
     end
-    use_slack = PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
+    use_slack =
+        PSI.get_balance_slack_variables(problem.internal.optimization_container.settings)
     storage = problem.ext["use_storage"]
 
     sym_dict = Dict{String, Symbol}()
     if reserve_name == "REG_UP"
-        reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
+        reserve =
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :reg⁺
-        if use_slack sym_dict["slack"] = :slack_reg⁺ end
-        if use_solar_reg sym_dict["solar"] = :reg⁺_S end
-        if use_wind_reserves sym_dict["wind"] = :reg⁺_W end
+        if use_slack
+            sym_dict["slack"] = :slack_reg⁺
+        end
+        if use_solar_reg
+            sym_dict["solar"] = :reg⁺_S
+        end
+        if use_wind_reserves
+            sym_dict["wind"] = :reg⁺_W
+        end
     elseif reserve_name == "REG_DN"
-        reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, reserve_name)
+        reserve =
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, reserve_name)
         sym_dict["reserve"] = :reg⁻
-        if use_slack sym_dict["slack"] = :slack_reg⁻ end
-        if use_solar_reg sym_dict["solar"] = :reg⁻_S end
-        if use_wind_reserves sym_dict["wind"] = :reg⁻_W end
+        if use_slack
+            sym_dict["slack"] = :slack_reg⁻
+        end
+        if use_solar_reg
+            sym_dict["solar"] = :reg⁻_S
+        end
+        if use_wind_reserves
+            sym_dict["wind"] = :reg⁻_W
+        end
     elseif reserve_name == "SPIN"
-        reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
+        reserve =
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :spin
-        if use_solar_spin sym_dict["solar"] = :spin_S end
-        if use_wind_reserves sym_dict["wind"] = :spin_W end
-        if use_slack sym_dict["slack"] = :slack_spin end
-        if :supp in keys(jump_model.obj_dict) sym_dict["supp"] = :supp end
+        if use_solar_spin
+            sym_dict["solar"] = :spin_S
+        end
+        if use_wind_reserves
+            sym_dict["wind"] = :spin_W
+        end
+        if use_slack
+            sym_dict["slack"] = :slack_spin
+        end
+        if :supp in keys(jump_model.obj_dict)
+            sym_dict["supp"] = :supp
+        end
     else
         throw(ArgumentError("Allowable reserve names are REG_UP, REG_DN, or SPIN"))
     end
@@ -54,23 +83,20 @@ function plot_reserve(
         start_time = case_initial_time,
     )[time_steps]
 
-    gen = get_reserve_data(
-        problem,
-        sym_dict,
-        time_steps;
-        kwargs...
-    )
+    gen = get_reserve_data(problem, sym_dict, time_steps; kwargs...)
     cat = make_fuel_dictionary(system)
 
-    reserves = my_categorize_reserves(gen.data,
-        cat,
-        sym_dict,
-        storage
-    )
+    reserves = my_categorize_reserves(gen.data, cat, sym_dict, storage)
 
     # Hack to make nuclear on the bottom and curtailment on top
     cat_names = intersect(PG.CATEGORY_DEFAULT, keys(reserves))
-    cat_names = [cat_names[2], cat_names[1], cat_names[3:end-2]..., cat_names[end], cat_names[end-1]]
+    cat_names = [
+        cat_names[2],
+        cat_names[1],
+        cat_names[3:(end - 2)]...,
+        cat_names[end],
+        cat_names[end - 1],
+    ]
     reserves_agg = PG.combine_categories(reserves; names = cat_names)
 
     y_label = get(kwargs, :y_label, "Reserves (MW)")
@@ -98,7 +124,8 @@ function plot_reserve(
     kwargs[:linewidth] = get(kwargs, :linewidth, 3)
 
     # Add reserve line
-    res_req = DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
+    res_req =
+        DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
         get_base_power(system)
 
     p = plot_dataframe(
@@ -133,7 +160,11 @@ function get_reserve_data(
     sym_dict::Dict,
     time_steps::UnitRange{Int64};
     kwargs...,
-) where T <: Union{CVaRReserveUnitCommitmentCC, BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}
+) where {T <: Union{
+    CVaRReserveUnitCommitmentCC,
+    BasecaseUnitCommitmentCC,
+    StochasticUnitCommitmentCC,
+}}
     scenario = kwargs[:scenario]
 
     system = PSI.get_system(problem)
@@ -141,21 +172,51 @@ function get_reserve_data(
     jump_model = PSI.get_jump_model(optimization_container)
 
     variables = Dict{Symbol, DataFrames.DataFrame}()
-    variables[sym_dict["reserve"]] = PSI.axis_array_to_dataframe(jump_model.obj_dict[sym_dict["reserve"]], [sym_dict["reserve"]])[time_steps, :]
+    variables[sym_dict["reserve"]] = PSI.axis_array_to_dataframe(
+        jump_model.obj_dict[sym_dict["reserve"]],
+        [sym_dict["reserve"]],
+    )[
+        time_steps,
+        :,
+    ]
     if "slack" in keys(sym_dict)
-        variables[sym_dict["slack"]] = PSI.axis_array_to_dataframe(jump_model.obj_dict[sym_dict["slack"]], [sym_dict["slack"]])[time_steps, :]
+        variables[sym_dict["slack"]] = PSI.axis_array_to_dataframe(
+            jump_model.obj_dict[sym_dict["slack"]],
+            [sym_dict["slack"]],
+        )[
+            time_steps,
+            :,
+        ]
     end
 
     if "solar" in keys(sym_dict)
         if length(size(jump_model.obj_dict[sym_dict["solar"]])) == 2 # 2D
-            variables[sym_dict["solar"]] = PSI.axis_array_to_dataframe(jump_model.obj_dict[sym_dict["solar"]], [sym_dict["solar"]])[time_steps, [scenario]]
+            variables[sym_dict["solar"]] = PSI.axis_array_to_dataframe(
+                jump_model.obj_dict[sym_dict["solar"]],
+                [sym_dict["solar"]],
+            )[
+                time_steps,
+                [scenario],
+            ]
         else # 1D
-            variables[sym_dict["solar"]] = PSI.axis_array_to_dataframe(jump_model.obj_dict[sym_dict["solar"]], [sym_dict["solar"]])[time_steps, :]
+            variables[sym_dict["solar"]] = PSI.axis_array_to_dataframe(
+                jump_model.obj_dict[sym_dict["solar"]],
+                [sym_dict["solar"]],
+            )[
+                time_steps,
+                :,
+            ]
         end
     end
 
     if "wind" in keys(sym_dict)
-        variables[sym_dict["wind"]] = PSI.axis_array_to_dataframe(jump_model.obj_dict[sym_dict["wind"]], [sym_dict["wind"]])[time_steps, :]
+        variables[sym_dict["wind"]] = PSI.axis_array_to_dataframe(
+            jump_model.obj_dict[sym_dict["wind"]],
+            [sym_dict["wind"]],
+        )[
+            time_steps,
+            :,
+        ]
     end
 
     if "supp" in keys(sym_dict)
@@ -163,7 +224,7 @@ function get_reserve_data(
         variables[sym_dict["supp"]] = _scenario_in_3D_array_to_dataframe(
             jump_model.obj_dict[sym_dict["supp"]],
             scenario,
-            time_steps
+            time_steps,
         )
     end
 
@@ -179,8 +240,8 @@ end
 function my_categorize_reserves(
     data::Dict{Symbol, DataFrames.DataFrame},
     cat::Dict,
-    sym_dict::Dict, 
-    storage::Bool
+    sym_dict::Dict,
+    storage::Bool,
 )
     category_dataframes = Dict{String, DataFrames.DataFrame}()
     var_types = Dict([("ThermalMultiStart", sym_dict["reserve"])])
@@ -228,8 +289,8 @@ function _get_reserve_save_path(
     title,
     format,
     save_dir;
-    kwargs...
-    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}
+    kwargs...,
+) where {T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}}
     scenario = kwargs[:scenario]
     fname = joinpath(save_dir, "$title Scenario $scenario.$format")
     return fname
@@ -240,8 +301,8 @@ function _get_reserve_save_path(
     title,
     format,
     save_dir;
-    kwargs...
-    ) where T <: BasecaseUnitCommitmentCC
+    kwargs...,
+) where {T <: BasecaseUnitCommitmentCC}
     fname = joinpath(save_dir, "$title.$format")
     return fname
 end

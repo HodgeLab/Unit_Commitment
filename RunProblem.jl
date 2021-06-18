@@ -31,7 +31,7 @@ C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse
 supp_type = isempty(ARGS) ? "generic" : ARGS[11]
 scenarios = 31
 
-scenario_plot_dict = Dict{String,Vector{Int64}}(
+scenario_plot_dict = Dict{String, Vector{Int64}}(
     "2018-03-15T00:00:00" => [30, 29],
     "2018-03-27T00:00:00" => [31, 13],
     "2018-04-15T00:00:00" => [27, 30],
@@ -59,11 +59,14 @@ if formulation == "D"
 elseif formulation == "C"
     formulation_dir = "CVAR"
     custom_problem = CVaRReserveUnitCommitmentCC
-    if !(supp_type in ["generic", "nonspin"]) throw(ArgumentError("Supp reserves must be generic or nonspin")) end
+    if !(supp_type in ["generic", "nonspin"])
+        throw(ArgumentError("Supp reserves must be generic or nonspin"))
+    end
 elseif formulation == "S"
     formulation_dir = "Stochastic"
     custom_problem = StochasticUnitCommitmentCC
-else throw(ArgumentError("Formulation key unrecognized"))
+else
+    throw(ArgumentError("Formulation key unrecognized"))
 end
 
 optional_title =
@@ -74,8 +77,15 @@ optional_title =
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "") *
     (formulation == "C" ? " " * supp_type : "")
 
-output_path = "./results/" * string(scenarios) * " scenarios/" * formulation_dir * 
-    "/" * split(initial_time, "T")[1] * optional_title * "/"
+output_path =
+    "./results/" *
+    string(scenarios) *
+    " scenarios/" *
+    formulation_dir *
+    "/" *
+    split(initial_time, "T")[1] *
+    optional_title *
+    "/"
 if !isdir(output_path)
     mkpath(output_path)
 end
@@ -90,7 +100,8 @@ system_da = System(
     time_series_read_only = true,
 )
 
-initial_cond_file = joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv")
+initial_cond_file =
+    joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv")
 if !isfile(initial_cond_file)
     initial_cond_file = joinpath(system_file_path, "initial_on.csv")
 end
@@ -152,12 +163,7 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 (status, solvetime) = @timed solve!(UC)
 
 if status.value == 0
-    write_to_CSV(
-        UC,
-        system_file_path,
-        output_path;
-        time=solvetime
-    )
+    write_to_CSV(UC, system_file_path, output_path; time = solvetime)
 
     # ha_file = joinpath(system_file_path, "HA_sys.json")
     # if isfile(ha_file)
@@ -180,22 +186,11 @@ if status.value == 0
             UC,
             "SPIN";
             save_dir = output_path,
-            scenario = (formulation == "D" ? nothing : scenario)
+            scenario = (formulation == "D" ? nothing : scenario),
         )
     end
 
-    plot_reserve(
-        UC,
-        "REG_UP";
-        save_dir = output_path,
-        scenario = nothing
-    )
+    plot_reserve(UC, "REG_UP"; save_dir = output_path, scenario = nothing)
 
-    plot_reserve(
-        UC,
-        "REG_DN";
-        save_dir = output_path,
-        scenario = nothing
-    )
-
+    plot_reserve(UC, "REG_DN"; save_dir = output_path, scenario = nothing)
 end

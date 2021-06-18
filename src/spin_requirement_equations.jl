@@ -1,9 +1,14 @@
 
-function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
+function apply_spin_requirements!(
+    problem::PSI.OperationsProblem{T},
     spin_device_names::Vector{String},
     required_spin::Vector{Float64},
-    storage_reserve_names::Vector{String}
-    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    storage_reserve_names::Vector{String},
+) where {T <: Union{
+    CVaRReserveUnitCommitmentCC,
+    StochasticUnitCommitmentCC,
+    BasecaseUnitCommitmentCC,
+}}
     use_solar_spin = problem.ext["use_solar_spin"]
     use_storage_reserves = problem.ext["use_storage_reserves"]
     use_wind_reserves = problem.ext["use_wind_reserves"]
@@ -12,7 +17,9 @@ function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     obj_dict = jump_model.obj_dict
-    use_supp = :total_supp in keys(obj_dict) || :total_supp in keys(optimization_container.expressions)
+    use_supp =
+        :total_supp in keys(obj_dict) ||
+        :total_supp in keys(optimization_container.expressions)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
     spin = obj_dict[:spin]
@@ -50,17 +57,19 @@ function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
             [t in time_steps],
             sum(
                 spin[g, t] for g in (
-                    use_storage_reserves ? union(spin_device_names, storage_reserve_names) :
-                    spin_device_names
+                    use_storage_reserves ?
+                    union(spin_device_names, storage_reserve_names) : spin_device_names
                 )
-            ) + (use_solar_spin ? spin_S[t] : 0) + (use_wind_reserves ? spin_W[t] : 0) >=
+            ) +
+            (use_solar_spin ? spin_S[t] : 0) +
+            (use_wind_reserves ? spin_W[t] : 0) >=
             required_spin[t] - (use_slack ? slack_spin[t] : 0)
         )
         renewable_spin_constraint = JuMP.@constraint(
             jump_model,
             [t in time_steps],
-            (use_storage_reserves ? sum(spin[g, t] for g in storage_reserve_names) : 0) + 
-            (use_solar_spin ? spin_S[t] : 0) + 
+            (use_storage_reserves ? sum(spin[g, t] for g in storage_reserve_names) : 0) +
+            (use_solar_spin ? spin_S[t] : 0) +
             (use_wind_reserves ? spin_W[t] : 0) <=
             required_spin[t] .* problem.ext["renewable_spin_prop"]
         )
@@ -71,17 +80,20 @@ function apply_spin_requirements!(problem::PSI.OperationsProblem{T},
             [j in scenarios, t in time_steps],
             sum(
                 spin[g, t] for g in (
-                    use_storage_reserves ? union(spin_device_names, storage_reserve_names) :
-                    spin_device_names
+                    use_storage_reserves ?
+                    union(spin_device_names, storage_reserve_names) : spin_device_names
                 )
-            ) + (use_solar_spin ? spin_S[j, t] : 0) + (use_wind_reserves ? spin_W[t] : 0) >=
-            required_spin[t] - (use_supp ? total_supp[j, t] : 0) - (use_slack ? slack_spin[t] : 0)
+            ) +
+            (use_solar_spin ? spin_S[j, t] : 0) +
+            (use_wind_reserves ? spin_W[t] : 0) >=
+            required_spin[t] - (use_supp ? total_supp[j, t] : 0) -
+            (use_slack ? slack_spin[t] : 0)
         )
         renewable_spin_constraint = JuMP.@constraint(
             jump_model,
             [j in scenarios, t in time_steps],
-            (use_storage_reserves ? sum(spin[g, t] for g in storage_reserve_names) : 0) + 
-            (use_solar_spin ? spin_S[j, t] : 0) + 
+            (use_storage_reserves ? sum(spin[g, t] for g in storage_reserve_names) : 0) +
+            (use_solar_spin ? spin_S[j, t] : 0) +
             (use_wind_reserves ? spin_W[t] : 0) <=
             required_spin[t] .* problem.ext["renewable_spin_prop"]
         )

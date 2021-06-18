@@ -1,11 +1,16 @@
 
-function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
+function apply_reg_requirements!(
+    problem::PSI.OperationsProblem{T},
     reg⁺_device_names::Vector{String},
     reg⁻_device_names::Vector{String},
     required_reg⁺::Vector{Float64},
     required_reg⁻::Vector{Float64},
-    storage_reserve_names::Vector{String}
-    ) where T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC, BasecaseUnitCommitmentCC}
+    storage_reserve_names::Vector{String},
+) where {T <: Union{
+    CVaRReserveUnitCommitmentCC,
+    StochasticUnitCommitmentCC,
+    BasecaseUnitCommitmentCC,
+}}
     use_solar_reg = problem.ext["use_solar_reg"]
     use_wind_reserves = problem.ext["use_wind_reserves"]
     use_storage_reserves = false # Hack to overwrite storage reg reserves for now
@@ -45,17 +50,19 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [t in time_steps],
             sum(
                 reg⁺[g, t] for g in (
-                    use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
-                    reg⁺_device_names
+                    use_storage_reserves ?
+                    union(reg⁺_device_names, storage_reserve_names) : reg⁺_device_names
                 )
-            ) + (use_solar_reg ? reg⁺_S[t] : 0) + (use_wind_reserves ? reg⁺_W[t] : 0) >=
+            ) +
+            (use_solar_reg ? reg⁺_S[t] : 0) +
+            (use_wind_reserves ? reg⁺_W[t] : 0) >=
             required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
         )
         renewable_reg⁺_constraint = JuMP.@constraint(
             jump_model,
             [t in time_steps],
-            (use_storage_reserves ? sum(reg⁺[g, t] for g in storage_reserve_names) : 0) + 
-            (use_solar_reg ? reg⁺_S[t] : 0) + 
+            (use_storage_reserves ? sum(reg⁺[g, t] for g in storage_reserve_names) : 0) +
+            (use_solar_reg ? reg⁺_S[t] : 0) +
             (use_wind_reserves ? reg⁺_W[t] : 0) <=
             required_reg⁺[t] .* problem.ext["renewable_reg_prop"]
         )
@@ -65,17 +72,19 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [t in time_steps],
             sum(
                 reg⁻[g, t] for g in (
-                    use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
-                    reg⁻_device_names
+                    use_storage_reserves ?
+                    union(reg⁻_device_names, storage_reserve_names) : reg⁻_device_names
                 )
-            ) + (use_solar_reg ? reg⁻_S[t] : 0) + (use_wind_reserves ? reg⁻_W[t] : 0) >=
+            ) +
+            (use_solar_reg ? reg⁻_S[t] : 0) +
+            (use_wind_reserves ? reg⁻_W[t] : 0) >=
             required_reg⁻[t] - (use_slack ? slack_reg⁻[t] : 0)
         )
         renewable_reg⁻_constraint = JuMP.@constraint(
             jump_model,
             [t in time_steps],
-            (use_storage_reserves ? sum(reg⁻[g, t] for g in storage_reserve_names) : 0) + 
-            (use_solar_reg ? reg⁻_S[t] : 0) + 
+            (use_storage_reserves ? sum(reg⁻[g, t] for g in storage_reserve_names) : 0) +
+            (use_solar_reg ? reg⁻_S[t] : 0) +
             (use_wind_reserves ? reg⁻_W[t] : 0) <=
             required_reg⁻[t] .* problem.ext["renewable_reg_prop"]
         )
@@ -86,17 +95,19 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [j in scenarios, t in time_steps],
             sum(
                 reg⁺[g, t] for g in (
-                    use_storage_reserves ? union(reg⁺_device_names, storage_reserve_names) :
-                    reg⁺_device_names
+                    use_storage_reserves ?
+                    union(reg⁺_device_names, storage_reserve_names) : reg⁺_device_names
                 )
-            ) + (use_solar_reg ? reg⁺_S[j, t] : 0) + (use_wind_reserves ? reg⁺_W[t] : 0) >=
+            ) +
+            (use_solar_reg ? reg⁺_S[j, t] : 0) +
+            (use_wind_reserves ? reg⁺_W[t] : 0) >=
             required_reg⁺[t] - (use_slack ? slack_reg⁺[t] : 0)
         )
         renewable_reg⁺_constraint = JuMP.@constraint(
             jump_model,
             [j in scenarios, t in time_steps],
-            (use_storage_reserves ? sum(reg⁺[g, t] for g in storage_reserve_names) : 0) + 
-            (use_solar_reg ? reg⁺_S[j, t] : 0) + 
+            (use_storage_reserves ? sum(reg⁺[g, t] for g in storage_reserve_names) : 0) +
+            (use_solar_reg ? reg⁺_S[j, t] : 0) +
             (use_wind_reserves ? reg⁺_W[t] : 0) <=
             required_reg⁺[t] .* problem.ext["renewable_reg_prop"]
         )
@@ -106,17 +117,19 @@ function apply_reg_requirements!(problem::PSI.OperationsProblem{T},
             [j in scenarios, t in time_steps],
             sum(
                 reg⁻[g, t] for g in (
-                    use_storage_reserves ? union(reg⁻_device_names, storage_reserve_names) :
-                    reg⁻_device_names
+                    use_storage_reserves ?
+                    union(reg⁻_device_names, storage_reserve_names) : reg⁻_device_names
                 )
-            ) + (use_solar_reg ? reg⁻_S[j, t] : 0) + (use_wind_reserves ? reg⁻_W[t] : 0) >=
+            ) +
+            (use_solar_reg ? reg⁻_S[j, t] : 0) +
+            (use_wind_reserves ? reg⁻_W[t] : 0) >=
             required_reg⁻[t] - (use_slack ? slack_reg⁻[t] : 0)
         )
         renewable_reg⁻_constraint = JuMP.@constraint(
             jump_model,
             [j in scenarios, t in time_steps],
-            (use_storage_reserves ? sum(reg⁻[g, t] for g in storage_reserve_names) : 0) + 
-            (use_solar_reg ? reg⁻_S[j, t] : 0) + 
+            (use_storage_reserves ? sum(reg⁻[g, t] for g in storage_reserve_names) : 0) +
+            (use_solar_reg ? reg⁻_S[j, t] : 0) +
             (use_wind_reserves ? reg⁻_W[t] : 0) <=
             required_reg⁻[t] .* problem.ext["renewable_reg_prop"]
         )
