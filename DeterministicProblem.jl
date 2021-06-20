@@ -1,13 +1,6 @@
 # To run: julia --project DeterministicProblem.jl true true true true true true
 
 include("src/Unit_commitment.jl")
-using PowerSimulations
-using PowerSystems
-using Dates
-using CSV
-using HDF5
-using DataFrames
-using PowerGraphics
 plotlyjs()
 
 ## Local
