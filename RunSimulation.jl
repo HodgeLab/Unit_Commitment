@@ -1,5 +1,5 @@
 include("src/Unit_commitment.jl")
-
+using Revise
 ## Local
 # using Xpress
 # solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
@@ -170,8 +170,9 @@ HAUC = OperationsProblem(
     system_ha,
     optimizer = solver,
     initial_time = DateTime(initial_time),
-    optimizer_log_print = true,
+    optimizer_log_print = false,
     balance_slack_variables = true,
+    system_to_file = false
 )
 
 #################################### Simulation Definition ################################
@@ -224,4 +225,5 @@ sim = Simulation(
     simulation_folder = mktempdir(cleanup = true),
 )
 
-build_out = build!(sim)
+build_out = build!(sim; serialize = false)
+execute!(sim)
