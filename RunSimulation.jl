@@ -1,5 +1,5 @@
 include("src/Unit_commitment.jl")
-
+using Revise
 ## Local
 # using Xpress
 # solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
@@ -91,9 +91,9 @@ system_da = System(
 )
 
 initial_cond_file =
-    joinpath(system_file_path, "initial_on_" * split(initial_time, "T")[1] * ".csv")
+    joinpath("data/", "initial_on_" * split(initial_time, "T")[1] * ".csv")
 if !isfile(initial_cond_file)
-    initial_cond_file = joinpath(system_file_path, "initial_on.csv")
+    initial_cond_file = joinpath("data/", "initial_on.csv")
 end
 
 apply_manual_data_updates!(system_da, use_nuclear, initial_cond_file)
@@ -170,8 +170,9 @@ HAUC = OperationsProblem(
     system_ha,
     optimizer = solver,
     initial_time = DateTime(initial_time),
-    optimizer_log_print = true,
+    optimizer_log_print = false,
     balance_slack_variables = true,
+    system_to_file = false
 )
 
 #################################### Simulation Definition ################################
@@ -186,21 +187,31 @@ sequence = SimulationSequence(
     # Defines how often a problem solves. I.e., the time diference between initial conditions
     intervals = Dict(
         "DAUC" => (Hour(24), Consecutive()),
-        "HAUC" => (Hour(24), Consecutive()),
+        "HAUC" => (Hour(1), Consecutive()),
     ),
     # How one stage "sends" variables to the next stage
     feedforward = Dict(
         # This sends the UC decisions down to the ED problem
-        ("DAUC", :devices, :Generators) => SemiContinuousFF(
+        ("HAUC", :devices, :ThermalMultiStart) => SemiContinuousFF(
             binary_source_problem = PSI.ON,
             affected_variables = [PSI.ACTIVE_POWER],
         ),
         # This fixes the Reserve Variables
-        ("DAUC", :services, :Generators) => RangeFF(
-            variable_source_problem_ub = PSI.ON,
-            variable_source_problem_lb = PSI.ON,
-            affected_variables = [PSI.ACTIVE_POWER],
-        ),
+        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
+        #     variable_source_problem_ub = :REG_DN__VariableReserve_ReserveDown,
+        #     variable_source_problem_lb = :REG_DN__VariableReserve_ReserveDown,
+        #     affected_variables = [:REG_DN__VariabeReserve_ReserveDown,],
+        # ),
+        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+        #     variable_source_problem_ub = :REG_UP__VariableReserve_ReserveUp,
+        #     variable_source_problem_lb = :REG_UP__VariableReserve_ReserveUp,
+        #     affected_variables = [:REG_UP__VariableReserve_ReserveUp],
+        # ),
+        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+        #     variable_source_problem_ub = :SPIN__VariableReserve_ReserveUp,
+        #     variable_source_problem_lb = :SPIN__VariableReserve_ReserveUp,
+        #     affected_variables = [:SPIN__VariableReserve_ReserveUp],
+        # ),
     ),
     # How the stage initializes
     ini_cond_chronology = IntraProblemChronology(),
@@ -214,4 +225,5 @@ sim = Simulation(
     simulation_folder = mktempdir(cleanup = true),
 )
 
-build_out = build!(sim)
+build_out = build!(sim; serialize = false)
+execute!(sim)

@@ -100,6 +100,8 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{StochasticUnitCommitm
         ug[g in thermal_gen_names, t in time_steps],
         binary = true
     )
+    optimization_container.variables[:On__ThermalMultiStart] = ug
+
     vg = JuMP.@variable(
         jump_model,
         vg[g in thermal_gen_names, t in time_steps],
