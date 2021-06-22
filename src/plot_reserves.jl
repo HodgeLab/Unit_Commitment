@@ -70,8 +70,9 @@ function plot_reserve(
         if use_slack
             sym_dict["slack"] = :slack_spin
         end
-        if :supp in keys(jump_model.obj_dict)
-            sym_dict["supp"] = :supp
+        if :total_supp in keys(jump_model.obj_dict) ||
+            :total_supp in keys(optimization_container.expressions)
+            sym_dict["supp"] = :total_supp
         end
     else
         throw(ArgumentError("Allowable reserve names are REG_UP, REG_DN, or SPIN"))
@@ -105,7 +106,7 @@ function plot_reserve(
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(reserves_agg, backend))
     if "supp" in keys(sym_dict)
-        DataFrames.rename!(reserves_agg, Dict("Imports/Exports" => "Supp"))
+        DataFrames.rename!(reserves_agg, Dict("Imports/Exports" => "Supplemental"))
     end
     if use_slack
         DataFrames.rename!(reserves_agg, Dict("Unserved Energy" => "Unserved Reserves"))
@@ -225,11 +226,21 @@ function get_reserve_data(
 
     if "supp" in keys(sym_dict)
         # Supp is 3D transformed to 2D; select single scenario out
-        variables[sym_dict["supp"]] = _scenario_in_3D_array_to_dataframe(
-            jump_model.obj_dict[sym_dict["supp"]],
-            scenario,
-            time_steps,
-        )
+        if problem.ext["supp_type"] == "generic" # generic version
+            variables[sym_dict["supp"]] = PSI.axis_array_to_dataframe(
+                jump_model.obj_dict[:total_supp],
+                [:total_supp],
+            )[
+                time_steps,
+                [scenario],
+            ]
+        else # Nonspin version, total_supp in obj_dict
+            variables[sym_dict["supp"]] = _scenario_in_3D_array_to_dataframe(
+                jump_model.obj_dict[:supp],
+                scenario,
+                time_steps,
+            )
+        end
     end
 
     # Scale from 100 MW to MW
