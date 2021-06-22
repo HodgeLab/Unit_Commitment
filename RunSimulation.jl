@@ -1,5 +1,4 @@
 include("src/Unit_commitment.jl")
-using Revise
 ## Local
 # using Xpress
 # solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
@@ -81,9 +80,9 @@ if !isdir(output_path)
 end
 
 ## Jose
-system_file_path = "/Users/jdlara/Dropbox/texas_data"
+# system_file_path = "/Users/jdlara/Dropbox/texas_data"
 ## Kate
-# system_file_path = "data/"
+system_file_path = "data/"
 
 system_da = System(
     joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
@@ -222,7 +221,7 @@ sim = Simulation(
     steps = 1,
     problems = problems,
     sequence = sequence,
-    simulation_folder = mktempdir(cleanup = true),
+    simulation_folder = output_path,
 )
 
 build_out = build!(sim; serialize = false)

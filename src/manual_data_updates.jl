@@ -29,8 +29,7 @@ function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
         else
             set_active_power!(
                 g,
-                (get_active_power_limits(g).max - 10^(-10)) / get_base_power(g) *
-                get_base_power(system),
+                get_active_power_limits(g).max
             )
         end
     end
