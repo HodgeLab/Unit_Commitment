@@ -221,6 +221,7 @@ sim = Simulation(
     problems = problems,
     sequence = sequence,
     simulation_folder = output_path,
+    initial_time = DateTime(initial_time),
 )
 
 build_out = build!(sim; serialize = false)
