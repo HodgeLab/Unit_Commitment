@@ -236,7 +236,7 @@ function get_reserve_data(
             ]
         else # Nonspin version, total_supp in obj_dict
             variables[sym_dict["supp"]] = _scenario_in_3D_array_to_dataframe(
-                jump_model.obj_dict[sym_dict["supp"]],
+                jump_model.obj_dict[:supp],
                 scenario,
                 time_steps,
             )
