@@ -87,6 +87,7 @@ function PSI.write_to_CSV(
     jump_model = PSI.get_jump_model(optimization_container)
     exclusions = [:λ, :β] # PWL chunks, expensive to export and useless
     for (k, v) in jump_model.obj_dict
+        print("writing $k\n")
         if !(k in exclusions)
             df = PSI.axis_array_to_dataframe(v, [k])
             file_name = joinpath(output_path, string(k) * ".csv")
