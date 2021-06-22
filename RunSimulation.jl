@@ -80,9 +80,9 @@ if !isdir(output_path)
 end
 
 ## Jose
-# system_file_path = "/Users/jdlara/Dropbox/texas_data"
+ system_file_path = "/Users/jdlara/Dropbox/texas_data"
 ## Kate
-system_file_path = "data/"
+# system_file_path = "data/"
 
 system_da = System(
     joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
@@ -169,6 +169,7 @@ HAUC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = false,
+    services_slack_variables = true,
     balance_slack_variables = true,
     system_to_file = false,
 )
@@ -220,9 +221,39 @@ sim = Simulation(
     steps = 1,
     problems = problems,
     sequence = sequence,
-    simulation_folder = output_path,
+    simulation_folder = mktempdir(), # output_path,
     initial_time = DateTime(initial_time),
 )
 
 build_out = build!(sim; serialize = false)
 execute!(sim)
+
+results = SimulationResults(sim)
+results_rh = get_problem_results(results, "HAUC")
+# You can do plots from the results_rh object
+
+# This is for the personalized plotting
+if status.value == 0
+    UC = sim.problems["DAUC"]
+    write_to_CSV(UC, system_file_path, output_path; time = solvetime)
+
+    # ha_file = joinpath(system_file_path, "HA_sys.json")
+    # if isfile(ha_file)
+    #     system_ha = System(ha_file; time_series_read_only = true)
+    #     write_missing_power(
+    #         problem,
+    #         system_ha,
+    #         system_file_path,
+    #         output_path)
+    # end
+
+    for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
+        plot_fuel(UC; scenario = scenario, save_dir = output_path)
+
+        plot_reserve(UC, "SPIN"; save_dir = output_path, scenario = scenario)
+
+        plot_reserve(UC, "REG_UP"; save_dir = output_path, scenario = scenario)
+
+        plot_reserve(UC, "REG_DN"; save_dir = output_path, scenario = scenario)
+    end
+end
