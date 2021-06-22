@@ -89,8 +89,7 @@ system_da = System(
     time_series_read_only = true,
 )
 
-initial_cond_file =
-    joinpath("data/", "initial_on_" * split(initial_time, "T")[1] * ".csv")
+initial_cond_file = joinpath("data/", "initial_on_" * split(initial_time, "T")[1] * ".csv")
 if !isfile(initial_cond_file)
     initial_cond_file = joinpath("data/", "initial_on.csv")
 end
@@ -171,7 +170,7 @@ HAUC = OperationsProblem(
     initial_time = DateTime(initial_time),
     optimizer_log_print = false,
     balance_slack_variables = true,
-    system_to_file = false
+    system_to_file = false,
 )
 
 #################################### Simulation Definition ################################
