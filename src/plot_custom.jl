@@ -69,6 +69,7 @@ function PG.plot_fuel(
         title = nothing,
         stack = true,
         set_display = false,
+        stair = true,
         kwargs...,
     )
 
@@ -89,6 +90,7 @@ function PG.plot_fuel(
         stack = true,
         nofill = true,
         set_display = false,
+        stair = true,
         kwargs...,
     )
 
@@ -107,6 +109,7 @@ function PG.plot_fuel(
             stack = true,
             nofill = true,
             set_display = false,
+            stair = true,
             kwargs...,
         )
     end

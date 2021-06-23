@@ -119,6 +119,7 @@ function plot_reserve(
         title = nothing,
         stack = true,
         set_display = false,
+        stair = true,
         kwargs...,
     )
 
@@ -141,6 +142,7 @@ function plot_reserve(
         stack = true,
         nofill = true,
         set_display = false,
+        stair = true,
         kwargs...,
     )
 
