@@ -158,16 +158,6 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 if status.value == 0
     write_to_CSV(UC, system_file_path, output_path; time = solvetime)
 
-    # ha_file = joinpath(system_file_path, "HA_sys.json")
-    # if isfile(ha_file)
-    #     system_ha = System(ha_file; time_series_read_only = true)
-    #     write_missing_power(
-    #         problem,
-    #         system_ha,
-    #         system_file_path,
-    #         output_path)
-    # end
-
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
         plot_fuel(UC; scenario = scenario, save_dir = output_path)
 
