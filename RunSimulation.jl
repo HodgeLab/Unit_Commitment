@@ -80,9 +80,11 @@ if !isdir(output_path)
 end
 
 ## Jose
- system_file_path = "/Users/jdlara/Dropbox/texas_data"
+# system_file_path = "/Users/jdlara/Dropbox/texas_data"
+# simulation_folder = mktempdir()
 ## Kate
-# system_file_path = "data/"
+system_file_path = "data/"
+simulation_folder = output_path
 
 system_da = System(
     joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
@@ -114,7 +116,7 @@ UC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = true,
-    balance_slack_variables = true,
+    balance_slack_variables = false,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
@@ -221,31 +223,21 @@ sim = Simulation(
     steps = 1,
     problems = problems,
     sequence = sequence,
-    simulation_folder = mktempdir(), # output_path,
+    simulation_folder = simulation_folder,
     initial_time = DateTime(initial_time),
 )
 
 build_out = build!(sim; serialize = false)
-execute!(sim)
+(status, solvetime) = @timed execute!(sim)
 
 results = SimulationResults(sim)
 results_rh = get_problem_results(results, "HAUC")
-# You can do plots from the results_rh object
 
 # This is for the personalized plotting
 if status.value == 0
+    # Stage 1 outputs
     UC = sim.problems["DAUC"]
     write_to_CSV(UC, system_file_path, output_path; time = solvetime)
-
-    # ha_file = joinpath(system_file_path, "HA_sys.json")
-    # if isfile(ha_file)
-    #     system_ha = System(ha_file; time_series_read_only = true)
-    #     write_missing_power(
-    #         problem,
-    #         system_ha,
-    #         system_file_path,
-    #         output_path)
-    # end
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
         plot_fuel(UC; scenario = scenario, save_dir = output_path)
@@ -256,4 +248,11 @@ if status.value == 0
 
         plot_reserve(UC, "REG_DN"; save_dir = output_path, scenario = scenario)
     end
+
+    # Stage 2 outputs
+    my_plot_fuel(
+        results_rh,
+        system_ha;
+        use_slack = PSI.get_balance_slack_variables(HAUC.internal.optimization_container.settings),
+        save_dir = output_path)
 end
