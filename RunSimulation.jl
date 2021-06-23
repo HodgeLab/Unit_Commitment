@@ -250,5 +250,9 @@ if status.value == 0
     end
 
     # Stage 2 outputs
-    my_plot_fuel(results_rh, system_ha; save_dir = output_path)
+    my_plot_fuel(
+        results_rh,
+        system_ha;
+        use_slack = PSI.get_balance_slack_variables(HAUC.internal.optimization_container.settings),
+        save_dir = output_path)
 end
