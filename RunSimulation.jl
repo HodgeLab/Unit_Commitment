@@ -235,6 +235,8 @@ results_rh = get_problem_results(results, "HAUC")
 
 # This is for the personalized plotting
 if status.value == 0
+    plotlyjs()
+
     # Stage 1 outputs
     UC = sim.problems["DAUC"]
     write_to_CSV(UC, system_file_path, output_path; time = solvetime)
