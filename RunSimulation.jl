@@ -109,6 +109,8 @@ set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
 
+storage_reserve_names = ["EXPOSE_STORAGE"]
+
 UC = OperationsProblem(
     custom_problem,
     template_dauc,
@@ -122,7 +124,7 @@ UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
-UC.ext["storage_reserve_names"] = ["EXPOSE_STORAGE"]
+UC.ext["storage_reserve_names"] = storage_reserve_names
 UC.ext["use_wind_reserves"] = false
 UC.ext["use_solar_reg"] = use_solar_reg
 UC.ext["use_solar_spin"] = use_solar_spin
@@ -152,6 +154,13 @@ UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserve
 system_ha = System(
     joinpath(system_file_path, "HA_sys_UC_experiment.json");
     time_series_read_only = true,
+)
+
+add_inverter_based_reserves!(system_ha,
+    use_solar_reg,
+    use_solar_spin,
+    use_storage_reserves,
+    storage_reserve_names
 )
 
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)

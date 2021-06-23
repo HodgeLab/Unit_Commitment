@@ -1,3 +1,4 @@
+# Updates for stage 1
 function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
     for g in get_components(
         RenewableDispatch,
@@ -28,6 +29,38 @@ function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
             set_active_power!(g, 0.0)
         else
             set_active_power!(g, get_active_power_limits(g).max)
+        end
+    end
+end
+
+# Updates for stage 2
+function add_inverter_based_reserves!(system,
+    use_solar_reg,
+    use_solar_spin,
+    use_storage_reserves,
+    storage_reserve_names
+    )
+    # Add solar and the selected battery to the contributing device set
+    reg_reserve_up = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "REG_UP")
+    reg_reserve_dn =
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
+    spin_reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "SPIN")
+    for g in get_components(
+        RenewableDispatch,
+        system,
+        x -> get_prime_mover(x) == PrimeMovers.PVe,
+    )
+        if use_solar_reg
+            add_service!(g, reg_reserve_up, system)
+            add_service!(g, reg_reserve_dn, system)
+        end
+        if use_solar_spin
+            add_service!(g, spin_reserve, system)
+        end
+    end
+    if use_storage_reserves
+        for stor in storage_reserve_names
+            add_service!(get_component(GenericBattery, system, stor), spin_reserve, system)
         end
     end
 end
