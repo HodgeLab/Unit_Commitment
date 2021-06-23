@@ -80,11 +80,11 @@ if !isdir(output_path)
 end
 
 ## Jose
-system_file_path = "/Users/jdlara/Dropbox/texas_data"
-simulation_folder = mktempdir()
+# system_file_path = "/Users/jdlara/Dropbox/texas_data"
+# simulation_folder = mktempdir()
 ## Kate
-# system_file_path = "data/"
-# simulation_folder = output_path
+system_file_path = "data/"
+simulation_folder = output_path
 
 system_da = System(
     joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
@@ -116,7 +116,7 @@ UC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = true,
-    balance_slack_variables = true,
+    balance_slack_variables = false,
 )
 UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
