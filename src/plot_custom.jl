@@ -8,10 +8,11 @@ function PG.plot_fuel(
         StochasticUnitCommitmentCC,
     },
 }
-    title = get(kwargs, :title, "Fuel")
+    title = get(kwargs, :title, "DAUC Fuel")
     save_dir = get(kwargs, :save_dir, nothing)
     scenario = kwargs[:scenario]
     time_steps = get(kwargs, :time_steps, nothing)
+    charge_line = get(kwargs, :charge_line, false)
 
     p = PG._empty_plot()
     backend = Plots.backend()
@@ -92,7 +93,7 @@ function PG.plot_fuel(
     )
 
     # Add charging load line
-    if storage
+    if charge_line && storage
         load_and_charging = load_agg .+ sum.(eachrow(gen.data[:pb_in]))
         DataFrames.rename!(load_and_charging, Symbol.(["Load + charging"]))
         col = PG.match_fuel_colors(fuel_agg[!, ["Storage"]], backend)
@@ -109,6 +110,11 @@ function PG.plot_fuel(
             kwargs...,
         )
     end
+
+    # Overwrite x axis label
+    layout_kwargs = Dict{Symbol, Any}(:xaxis =>
+        Plots.PlotlyJS.attr(; title = "Time of Day"))
+    Plots.PlotlyJS.relayout!(p, Plots.PlotlyJS.Layout(; layout_kwargs...))
 
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
@@ -325,4 +331,100 @@ function _get_save_path(
 ) where {T <: BasecaseUnitCommitmentCC}
     fname = joinpath(save_dir, "$title.$format")
     return fname
+end
+
+
+# --------------------------------------------------
+# Modified plot_fuel for stage 2 using PowerSimulations
+# --------------------------------------------------
+
+function my_plot_fuel(
+    res::PSI.SimulationProblemResults,
+    system::PSY.System;
+    kwargs...
+    )
+    save_dir = get(kwargs, :save_dir, nothing)
+    time_steps = get(kwargs, :time_steps, nothing)
+    use_slack = get(kwargs, :use_slack, true)
+    title = get(kwargs, :title, "HAUC Fuel")
+
+    p = PG._empty_plot()
+    backend = Plots.backend()
+
+    timestamps = get_realized_timestamps(res)
+    gen = get_generation_data(res)
+    if isnothing(time_steps)
+        time_steps = 1:length(timestamps)
+    end
+
+    # Scale to GW
+    for k in keys(gen.data)
+        gen.data[k][:, setdiff(names(gen.data[k]), ["DateTime"])] .*= get_base_power(system) ./ 1000
+    end
+
+    categories = make_fuel_dictionary(system)
+
+    fuel = categorize_data(gen.data, categories; slacks = use_slack, curtailment = true)
+
+    # Hack to make nuclear on the bottom
+    cat_names = intersect(PG.CATEGORY_DEFAULT, keys(fuel))
+    cat_names = [cat_names[2], cat_names[1], cat_names[3:end]...]
+    fuel_agg = PG.combine_categories(fuel; names = cat_names)
+
+    y_label = "Generation (GW)"
+    x_label = "Time of Day"
+
+    seriescolor = PG.match_fuel_colors(fuel_agg, backend)
+    p = plot_dataframe(
+        fuel_agg,
+        gen.time[time_steps];
+        seriescolor = seriescolor,
+        y_label = y_label,
+        x_label = x_label,
+        title = nothing,
+        stack = true,
+        set_display = false
+    )
+
+    kwargs = Dict{Symbol, Any}((k, v) for (k, v) in kwargs if k ∉ [:nofill, :seriescolor])
+    kwargs[:linestyle] = :dash
+    kwargs[:linewidth] = 3
+
+    # Can also try system instead of res, I made up this timestamps call
+    load = get_load_data(res; initial_time=first(timestamps))
+    load_agg = PG.combine_categories(load.data)
+    load_agg .*= get_base_power(system) ./ 1000
+    DataFrames.rename!(load_agg, [:Load])
+
+    p = plot_dataframe(
+        p,
+        load_agg,
+        gen.time[time_steps];
+        seriescolor = ["black"],
+        y_label = y_label,
+        x_label = x_label,
+        title = nothing,
+        stack = true,
+        nofill = true,
+        set_display = false,
+        kwargs...,
+    )
+
+    # Overwrite x axis label
+    layout_kwargs = Dict{Symbol, Any}(:xaxis =>
+        Plots.PlotlyJS.attr(; title = "Time of Day"))
+    Plots.PlotlyJS.relayout!(p, Plots.PlotlyJS.Layout(; layout_kwargs...))
+
+    if !isnothing(save_dir)
+        title = replace(title, " " => "_")
+        for format in ("png", "pdf")
+            fname = joinpath(save_dir, "$title.$format")
+            # Overwrite existing plots
+            if isfile(fname)
+                rm(fname)
+            end
+            PG.save_plot(p, fname, backend)
+        end
+    end
+    return p
 end
