@@ -9,10 +9,12 @@ using Dates
 using CSV
 using HDF5
 using PowerGraphics
+using InfrastructureSystems
 
 const PSI = PowerSimulations
 const PSY = PowerSystems
 const PG = PowerGraphics
+const IS = InfrastructureSystems
 
 include("manual_data_updates.jl")
 include("cvar_reserve_uc.jl")
@@ -30,3 +32,4 @@ include("wind_equations.jl")
 include("reg_requirement_equations.jl")
 include("spin_requirement_equations.jl")
 include("thermal_constraints.jl")
+include("energy_target.jl")
