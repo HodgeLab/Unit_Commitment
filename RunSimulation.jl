@@ -156,11 +156,12 @@ system_ha = System(
     time_series_read_only = true,
 )
 
-add_inverter_based_reserves!(system_ha,
+add_inverter_based_reserves!(
+    system_ha,
     use_solar_reg,
     use_solar_spin,
     use_storage_reserves,
-    storage_reserve_names
+    storage_reserve_names,
 )
 
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
@@ -210,14 +211,14 @@ sequence = SimulationSequence(
         ),
         # This fixes the Reserve Variables
         ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
-              variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
-              variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
-             affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
-         ),
-         ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-             variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
-             variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
-             affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+            variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
+            variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
+            affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
+        ),
+        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+            variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
+            variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
+            affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
         ),
     ),
     # How the stage initializes
@@ -250,33 +251,44 @@ if status.value == 0
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
         plot_fuel(UC; scenario = scenario, save_dir = output_path, time_steps = 1:24)
 
-        plot_reserve(UC, "SPIN";
+        plot_reserve(
+            UC,
+            "SPIN";
             save_dir = output_path,
             scenario = scenario,
-            time_steps = 1:24)
+            time_steps = 1:24,
+        )
 
-        plot_reserve(UC, "REG_UP";
+        plot_reserve(
+            UC,
+            "REG_UP";
             save_dir = output_path,
             scenario = scenario,
-            time_steps = 1:24)
+            time_steps = 1:24,
+        )
 
-        plot_reserve(UC, "REG_DN";
+        plot_reserve(
+            UC,
+            "REG_DN";
             save_dir = output_path,
             scenario = scenario,
-            time_steps = 1:24)
+            time_steps = 1:24,
+        )
     end
 
     # Stage 2 outputs
     my_plot_fuel(
         results_rh,
         system_ha;
-        use_slack = PSI.get_balance_slack_variables(HAUC.internal.optimization_container.settings),
-        save_dir = output_path)
+        use_slack = PSI.get_balance_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        save_dir = output_path,
+    )
 
     # Stage 2 plots of reserves
 
     res = read_realized_variables(results_rh)
     reserves_up = res[:REG_UP__VariableReserve_ReserveUp]
     plot_dataframe(reserves_up, get_realized_timestamps(results_rh))
-
 end

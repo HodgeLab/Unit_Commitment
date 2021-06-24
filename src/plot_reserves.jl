@@ -71,7 +71,7 @@ function plot_reserve(
             sym_dict["slack"] = :slack_spin
         end
         if :total_supp in keys(jump_model.obj_dict) ||
-            :total_supp in keys(optimization_container.expressions)
+           :total_supp in keys(optimization_container.expressions)
             sym_dict["supp"] = :total_supp
         end
     else
@@ -229,13 +229,11 @@ function get_reserve_data(
     if "supp" in keys(sym_dict)
         # Supp is 3D transformed to 2D; select single scenario out
         if problem.ext["supp_type"] == "generic" # generic version
-            variables[sym_dict["supp"]] = PSI.axis_array_to_dataframe(
-                jump_model.obj_dict[:total_supp],
-                [:total_supp],
-            )[
-                time_steps,
-                [scenario],
-            ]
+            variables[sym_dict["supp"]] =
+                PSI.axis_array_to_dataframe(jump_model.obj_dict[:total_supp], [:total_supp])[
+                    time_steps,
+                    [scenario],
+                ]
         else # Nonspin version, total_supp in obj_dict
             variables[sym_dict["supp"]] = _scenario_in_3D_array_to_dataframe(
                 jump_model.obj_dict[:supp],

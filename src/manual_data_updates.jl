@@ -34,12 +34,13 @@ function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
 end
 
 # Updates for stage 2
-function add_inverter_based_reserves!(system,
+function add_inverter_based_reserves!(
+    system,
     use_solar_reg,
     use_solar_spin,
     use_storage_reserves,
-    storage_reserve_names
-    )
+    storage_reserve_names,
+)
     # Add solar and the selected battery to the contributing device set
     reg_reserve_up = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "REG_UP")
     reg_reserve_dn =
