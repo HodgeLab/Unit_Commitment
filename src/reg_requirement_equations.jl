@@ -11,6 +11,7 @@ function apply_reg_requirements!(
         CVaRReserveUnitCommitmentCC,
         StochasticUnitCommitmentCC,
         BasecaseUnitCommitmentCC,
+        HourAheadUnitCommitmentCC
     },
 }
     use_solar_reg = problem.ext["use_solar_reg"]

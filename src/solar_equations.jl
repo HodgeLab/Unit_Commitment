@@ -86,7 +86,7 @@ function apply_solar!(
     required_reg⁺::Vector{Float64},
     required_reg⁻::Vector{Float64},
     required_spin::Vector{Float64},
-) where {T <: BasecaseUnitCommitmentCC}
+) where T <: Union{BasecaseUnitCommitmentCC, HourAheadUnitCommitmentCC}
     use_solar_reg = problem.ext["use_solar_reg"]
     use_reg = problem.ext["use_reg"]
     solar_scale = problem.ext["solar_scale"]

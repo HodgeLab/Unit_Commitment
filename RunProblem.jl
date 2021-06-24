@@ -156,7 +156,8 @@ build!(UC; output_dir = output_path, serialize = false) # use serialize=true to 
 (status, solvetime) = @timed solve!(UC)
 
 if status.value == 0
-    write_to_CSV(UC, system_file_path, output_path; time = solvetime)
+    write_to_CSV(UC, output_path)
+    write_summary_stats(UC, output_path, solvetime)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
         plot_fuel(UC; scenario = scenario, save_dir = output_path)

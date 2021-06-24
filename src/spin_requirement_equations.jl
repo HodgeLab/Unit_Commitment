@@ -9,6 +9,7 @@ function apply_spin_requirements!(
         CVaRReserveUnitCommitmentCC,
         StochasticUnitCommitmentCC,
         BasecaseUnitCommitmentCC,
+        HourAheadUnitCommitmentCC
     },
 }
     use_solar_spin = problem.ext["use_solar_spin"]

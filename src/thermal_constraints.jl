@@ -11,6 +11,7 @@ function apply_thermal_constraints!(
         CVaRReserveUnitCommitmentCC,
         StochasticUnitCommitmentCC,
         BasecaseUnitCommitmentCC,
+        HourAheadUnitCommitmentCC
     },
 }
     use_reg = problem.ext["use_reg"]
@@ -450,7 +451,7 @@ function _apply_thermal_scenario_based_constraints!(
     ramp_dn::Dict{},
     ug_t0::Dict{},
     Pg_t0::Dict{}
-) where {T <: BasecaseUnitCommitmentCC}
+) where T <: Union{BasecaseUnitCommitmentCC, HourAheadUnitCommitmentCC}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
 

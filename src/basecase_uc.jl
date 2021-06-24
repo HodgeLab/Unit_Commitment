@@ -4,15 +4,15 @@ struct HourAheadUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmentCC};)
     ug_t0, Pg_t0, time_up_t0, time_down_t0 = _get_initial_conditions(problem)
 
-    _build_basecase_internal(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
+    _build_basecase_internal!(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
 end
 
 function PSI.problem_build!(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
     ug_t0, Pg_t0, time_up_t0, time_down_t0 = _get_initial_conditions(problem)
 
-    _build_basecase_internal(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
+    _build_basecase_internal!(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
 
-    _enforce_ha_commitments!(problem)
+    # _enforce_ha_commitments!(problem)
 end
 
 function _build_basecase_internal!(problem::PSI.OperationsProblem{T},
@@ -287,7 +287,45 @@ function _get_initial_conditions(problem::PSI.OperationsProblem{BasecaseUnitComm
 end
 
 function _get_initial_conditions(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
-    # TODO
+    system = PSI.get_system(problem)
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+
+    if HAUC.ext["step"] == 1
+
+        # initial conditions
+        ug_t0 = Dict(
+            g => PSY.get_status(get_component(ThermalMultiStart, system, g)) for
+            g in thermal_gen_names
+        )
+        time_up_t0 = Dict(
+            g => ug_t0[g] * get_time_at_status(get_component(ThermalMultiStart, system, g))
+            for g in thermal_gen_names
+        )
+        time_down_t0 = Dict(
+            g =>
+                (1 - ug_t0[g]) *
+                get_time_at_status(get_component(ThermalMultiStart, system, g)) for
+            g in thermal_gen_names
+        )
+        # This is just power (Pg), not power above minimum (pg)
+        Pg_t0 = Dict(
+            g => get_active_power(get_component(ThermalMultiStart, system, g)) for
+            g in thermal_gen_names
+        )
+    else
+        previous_time = PSI.get_initial_time(problem) - Minute(5)
+
+        # WHAT IS THIS?
+        ug_t0 = Dict(
+            g => [previous_time, g] for
+            g in thermal_gen_names
+        )
+        # ug_t0 = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[[hour], :]
+
+        # TODO THESE TWO AREN'T CALCULATED YET
+        # time_up_t0
+        # time_down_t0
+    end
 
     return (ug_t0, Pg_t0, time_up_t0, time_down_t0)
 end

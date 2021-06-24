@@ -3,10 +3,10 @@ plotlyjs()
 
 ## Local
 # using Xpress
-# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.01) # MIPRELSTOP was  0.0001
 ## Eagle
 using Gurobi
-solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.01)
 
 ############################## First Stage Problem Definition ##############################
 formulation = isempty(ARGS) ? "D" : ARGS[1]
@@ -156,6 +156,8 @@ system_ha = System(
     time_series_read_only = true,
 )
 
+apply_manual_data_updates!(system_ha, use_nuclear, initial_cond_file)
+
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
@@ -164,7 +166,6 @@ set_device_model!(template_hauc, HydroDispatch, FixedOutput)
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
-### Using Dispatch here, not the same as above
 set_device_model!(template_hauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
 
 #################################### Solve Stage 1 Problem ################################
@@ -185,6 +186,7 @@ for h in 1:24
 
     HAUC = OperationsProblem(
         HourAheadUnitCommitmentCC,
+        template_hauc,
         system_ha,
         optimizer = solver,
         initial_time = hauc_initial_time,
@@ -192,7 +194,11 @@ for h in 1:24
         balance_slack_variables = true,
         system_to_file = false,
     )
-
+    for (k, v) in UC.ext
+        HAUC.ext[k] = v
+    end
+    HAUC.ext["UC_obj_dict"] = PSI.get_jump_model(PSI.get_optimization_container(UC)).obj_dict
+    HAUC.ext["step"] = h
     
     build!(HAUC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
     (status, solvetime) = @timed solve!(HAUC)
@@ -201,12 +207,15 @@ for h in 1:24
         throw(ErrorException("HAUC failed at step " * string(h)))
     end
 
+    write_to_CSV(HAUC, output_path; append = (h == 1 ? false : true))
+
 end
 
 #################################### Export  ################################
 
 # Record stage 1 outputs
-write_to_CSV(UC, system_file_path, output_path; time = solvetime)
+write_to_CSV(UC, output_path)
+write_summary_stats(UC, output_path, solvetime)
 
 for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
     plot_fuel(UC; scenario = scenario, save_dir = output_path)

@@ -9,6 +9,7 @@ function apply_wind!(
         CVaRReserveUnitCommitmentCC,
         StochasticUnitCommitmentCC,
         BasecaseUnitCommitmentCC,
+        HourAheadUnitCommitmentCC
     },
 }
     use_wind_reserves = problem.ext["use_wind_reserves"]

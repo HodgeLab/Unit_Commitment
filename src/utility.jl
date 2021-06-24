@@ -8,6 +8,7 @@ function get_area_total_time_series(
         CVaRReserveUnitCommitmentCC,
         BasecaseUnitCommitmentCC,
         StochasticUnitCommitmentCC,
+        HourAheadUnitCommitmentCC
     },
 }
     system = PSI.get_system(problem)
@@ -73,14 +74,14 @@ end
 # Unconventional route. To be cleaned later.
 function PSI.write_to_CSV(
     problem::PSI.OperationsProblem{T},
-    data_path::String,
     output_path::String;
-    time = nothing,
+    append = false
 ) where {
     T <: Union{
         CVaRReserveUnitCommitmentCC,
         BasecaseUnitCommitmentCC,
         StochasticUnitCommitmentCC,
+        HourAheadUnitCommitmentCC
     },
 }
     optimization_container = PSI.get_optimization_container(problem)
@@ -91,14 +92,13 @@ function PSI.write_to_CSV(
         if !(k in exclusions)
             df = PSI.axis_array_to_dataframe(v, [k])
             file_name = joinpath(output_path, string(k) * ".csv")
-            CSV.write(file_name, df)
+            CSV.write(file_name, df; append)
         end
     end
 
-    _write_summary_stats(problem, output_path, time)
 end
 
-function _write_summary_stats(
+function write_summary_stats(
     problem::PSI.OperationsProblem{T},
     output_path::String,
     solvetime::Union{Nothing, Float64},
@@ -217,7 +217,7 @@ function _write_summary_stats(
     CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
 end
 
-function _write_summary_stats(
+function write_summary_stats(
     problem::PSI.OperationsProblem{T},
     output_path::String,
     solvetime::Union{Nothing, Float64},
