@@ -75,7 +75,8 @@ end
 function PSI.write_to_CSV(
     problem::PSI.OperationsProblem{T},
     output_path::String;
-    append = false
+    append = false,
+    time_steps = nothing
 ) where {
     T <: Union{
         CVaRReserveUnitCommitmentCC,
@@ -86,13 +87,16 @@ function PSI.write_to_CSV(
 }
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
+    if isnothing(time_steps)
+        time_steps = PSI.model_time_steps(optimization_container)
+    end
     exclusions = [:λ, :β] # PWL chunks, expensive to export and useless
     for (k, v) in jump_model.obj_dict
         print("writing $k\n")
         if !(k in exclusions)
             df = PSI.axis_array_to_dataframe(v, [k])
             file_name = joinpath(output_path, string(k) * ".csv")
-            CSV.write(file_name, df; append)
+            CSV.write(file_name, df[time_steps, :]; append)
         end
     end
 

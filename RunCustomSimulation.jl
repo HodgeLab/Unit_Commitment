@@ -77,16 +77,19 @@ output_path =
     split(initial_time, "T")[1] *
     optional_title *
     "/"
-if !isdir(output_path)
-    mkpath(output_path)
+UC_output_path = output_path * "UC/"
+HAUC_output_path = output_path * "HAUC/"
+if !isdir(UC_output_path)
+    mkpath(UC_output_path)
+end
+if !isdir(HAUC_output_path)
+    mkpath(HAUC_output_path)
 end
 
 ## Jose
 # system_file_path = "/Users/jdlara/Dropbox/texas_data"
-# simulation_folder = mktempdir()
 ## Kate
 system_file_path = "data/"
-simulation_folder = output_path
 
 system_da = System(
     joinpath(system_file_path, "DA_sys_" * string(scenarios) * "_scenarios.json");
@@ -171,7 +174,7 @@ set_device_model!(template_hauc, ThermalMultiStart, ThermalMultiStartUnitCommitm
 #################################### Solve Stage 1 Problem ################################
 
 # Build and solve the Stage 1
-build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
+build!(UC; output_dir = UC_output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
 (status, solvetime) = @timed solve!(UC)
 
 if status.value != 0
@@ -200,31 +203,31 @@ for h in 1:24
     HAUC.ext["UC_obj_dict"] = PSI.get_jump_model(PSI.get_optimization_container(UC)).obj_dict
     HAUC.ext["step"] = h
     
-    build!(HAUC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
+    build!(HAUC; output_dir = HAUC_output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
     (status, solvetime) = @timed solve!(HAUC)
 
     if status.value != 0
         throw(ErrorException("HAUC failed at step " * string(h)))
     end
 
-    write_to_CSV(HAUC, output_path; append = (h == 1 ? false : true))
+    write_to_CSV(HAUC, HAUC_output_path; append = (h == 1 ? false : true), time_steps = 1:12)
 
 end
 
 #################################### Export  ################################
 
 # Record stage 1 outputs
-write_to_CSV(UC, output_path)
-write_summary_stats(UC, output_path, solvetime)
+write_to_CSV(UC, UC_output_path)
+write_summary_stats(UC, UC_output_path, solvetime)
 
 for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-    plot_fuel(UC; scenario = scenario, save_dir = output_path)
+    plot_fuel(UC; scenario = scenario, save_dir = UC_output_path)
 
-    plot_reserve(UC, "SPIN"; save_dir = output_path, scenario = scenario)
+    plot_reserve(UC, "SPIN"; save_dir = UC_output_path, scenario = scenario)
 
-    plot_reserve(UC, "REG_UP"; save_dir = output_path, scenario = scenario)
+    plot_reserve(UC, "REG_UP"; save_dir = UC_output_path, scenario = scenario)
 
-    plot_reserve(UC, "REG_DN"; save_dir = output_path, scenario = scenario)
+    plot_reserve(UC, "REG_DN"; save_dir = UC_output_path, scenario = scenario)
 end
 
 # Stage 2 outputs
