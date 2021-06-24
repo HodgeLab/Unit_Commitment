@@ -80,10 +80,10 @@ if !isdir(output_path)
 end
 
 ## Jose
-# system_file_path = "/Users/jdlara/Dropbox/texas_data"
-# simulation_folder = mktempdir()
+system_file_path = "/Users/jdlara/Dropbox/texas_data"
+simulation_folder = pwd()
 ## Kate
-system_file_path = "data/"
+# system_file_path = "data/"
 simulation_folder = output_path
 
 system_da = System(
@@ -109,6 +109,8 @@ set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
 
+storage_reserve_names = ["EXPOSE_STORAGE"]
+
 UC = OperationsProblem(
     custom_problem,
     template_dauc,
@@ -122,7 +124,7 @@ UC.ext["cc_restrictions"] =
     JSON.parsefile(joinpath(system_file_path, "cc_restrictions.json"))
 UC.ext["use_storage"] = use_storage
 UC.ext["use_storage_reserves"] = use_storage_reserves
-UC.ext["storage_reserve_names"] = ["EXPOSE_STORAGE"]
+UC.ext["storage_reserve_names"] = storage_reserve_names
 UC.ext["use_wind_reserves"] = false
 UC.ext["use_solar_reg"] = use_solar_reg
 UC.ext["use_solar_spin"] = use_solar_spin
@@ -154,12 +156,20 @@ system_ha = System(
     time_series_read_only = true,
 )
 
+add_inverter_based_reserves!(
+    system_ha,
+    use_solar_reg,
+    use_solar_spin,
+    use_storage_reserves,
+    storage_reserve_names,
+)
+
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
 # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
 set_device_model!(template_hauc, HydroDispatch, FixedOutput)
-set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
+set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve)) #; use_service_name = true))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
 ### Using Dispatch here, not the same as above
@@ -171,10 +181,12 @@ HAUC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = false,
-    services_slack_variables = true,
+    #services_slack_variables = true,
     balance_slack_variables = true,
     system_to_file = false,
 )
+
+#build!(HAUC; output_dir = mktempdir())
 
 #################################### Simulation Definition ################################
 
@@ -198,21 +210,16 @@ sequence = SimulationSequence(
             affected_variables = [PSI.ACTIVE_POWER],
         ),
         # This fixes the Reserve Variables
-        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
-        #     variable_source_problem_ub = :REG_DN__VariableReserve_ReserveDown,
-        #     variable_source_problem_lb = :REG_DN__VariableReserve_ReserveDown,
-        #     affected_variables = [:REG_DN__VariabeReserve_ReserveDown,],
-        # ),
-        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-        #     variable_source_problem_ub = :REG_UP__VariableReserve_ReserveUp,
-        #     variable_source_problem_lb = :REG_UP__VariableReserve_ReserveUp,
-        #     affected_variables = [:REG_UP__VariableReserve_ReserveUp],
-        # ),
-        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-        #     variable_source_problem_ub = :SPIN__VariableReserve_ReserveUp,
-        #     variable_source_problem_lb = :SPIN__VariableReserve_ReserveUp,
-        #     affected_variables = [:SPIN__VariableReserve_ReserveUp],
-        # ),
+        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
+            variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
+            variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
+            affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
+        ),
+        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+            variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
+            variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
+            affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+        ),
     ),
     # How the stage initializes
     ini_cond_chronology = IntraProblemChronology(),
@@ -242,19 +249,46 @@ if status.value == 0
     write_to_CSV(UC, system_file_path, output_path; time = solvetime)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = output_path)
+        plot_fuel(UC; scenario = scenario, save_dir = output_path, time_steps = 1:24)
 
-        plot_reserve(UC, "SPIN"; save_dir = output_path, scenario = scenario)
+        plot_reserve(
+            UC,
+            "SPIN";
+            save_dir = output_path,
+            scenario = scenario,
+            time_steps = 1:24,
+        )
 
-        plot_reserve(UC, "REG_UP"; save_dir = output_path, scenario = scenario)
+        plot_reserve(
+            UC,
+            "REG_UP";
+            save_dir = output_path,
+            scenario = scenario,
+            time_steps = 1:24,
+        )
 
-        plot_reserve(UC, "REG_DN"; save_dir = output_path, scenario = scenario)
+        plot_reserve(
+            UC,
+            "REG_DN";
+            save_dir = output_path,
+            scenario = scenario,
+            time_steps = 1:24,
+        )
     end
 
     # Stage 2 outputs
     my_plot_fuel(
         results_rh,
         system_ha;
-        use_slack = PSI.get_balance_slack_variables(HAUC.internal.optimization_container.settings),
-        save_dir = output_path)
+        use_slack = PSI.get_balance_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        save_dir = output_path,
+    )
+
+    # Stage 2 plots of reserves
+
+    res = read_realized_variables(results_rh)
+    reserves_up = res[:REG_UP__VariableReserve_ReserveUp]
+    plot_dataframe(reserves_up, get_realized_timestamps(results_rh))
 end

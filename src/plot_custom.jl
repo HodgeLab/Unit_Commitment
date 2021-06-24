@@ -69,6 +69,7 @@ function PG.plot_fuel(
         title = nothing,
         stack = true,
         set_display = false,
+        stair = true,
         kwargs...,
     )
 
@@ -89,6 +90,7 @@ function PG.plot_fuel(
         stack = true,
         nofill = true,
         set_display = false,
+        stair = true,
         kwargs...,
     )
 
@@ -107,13 +109,14 @@ function PG.plot_fuel(
             stack = true,
             nofill = true,
             set_display = false,
+            stair = true,
             kwargs...,
         )
     end
 
     # Overwrite x axis label
-    layout_kwargs = Dict{Symbol, Any}(:xaxis =>
-        Plots.PlotlyJS.attr(; title = "Time of Day"))
+    layout_kwargs =
+        Dict{Symbol, Any}(:xaxis => Plots.PlotlyJS.attr(; title = "Time of Day"))
     Plots.PlotlyJS.relayout!(p, Plots.PlotlyJS.Layout(; layout_kwargs...))
 
     if !isnothing(save_dir)
@@ -333,16 +336,11 @@ function _get_save_path(
     return fname
 end
 
-
 # --------------------------------------------------
 # Modified plot_fuel for stage 2 using PowerSimulations
 # --------------------------------------------------
 
-function my_plot_fuel(
-    res::PSI.SimulationProblemResults,
-    system::PSY.System;
-    kwargs...
-    )
+function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System; kwargs...)
     save_dir = get(kwargs, :save_dir, nothing)
     time_steps = get(kwargs, :time_steps, nothing)
     use_slack = get(kwargs, :use_slack, true)
@@ -359,7 +357,8 @@ function my_plot_fuel(
 
     # Scale to GW
     for k in keys(gen.data)
-        gen.data[k][:, setdiff(names(gen.data[k]), ["DateTime"])] .*= get_base_power(system) ./ 1000
+        gen.data[k][:, setdiff(names(gen.data[k]), ["DateTime"])] .*=
+            get_base_power(system) ./ 1000
     end
 
     categories = make_fuel_dictionary(system)
@@ -383,7 +382,7 @@ function my_plot_fuel(
         x_label = x_label,
         title = nothing,
         stack = true,
-        set_display = false
+        set_display = false,
     )
 
     kwargs = Dict{Symbol, Any}((k, v) for (k, v) in kwargs if k ∉ [:nofill, :seriescolor])
@@ -391,7 +390,7 @@ function my_plot_fuel(
     kwargs[:linewidth] = 3
 
     # Can also try system instead of res, I made up this timestamps call
-    load = get_load_data(res; initial_time=first(timestamps))
+    load = get_load_data(res; initial_time = first(timestamps))
     load_agg = PG.combine_categories(load.data)
     load_agg .*= get_base_power(system) ./ 1000
     DataFrames.rename!(load_agg, [:Load])
@@ -411,8 +410,8 @@ function my_plot_fuel(
     )
 
     # Overwrite x axis label
-    layout_kwargs = Dict{Symbol, Any}(:xaxis =>
-        Plots.PlotlyJS.attr(; title = "Time of Day"))
+    layout_kwargs =
+        Dict{Symbol, Any}(:xaxis => Plots.PlotlyJS.attr(; title = "Time of Day"))
     Plots.PlotlyJS.relayout!(p, Plots.PlotlyJS.Layout(; layout_kwargs...))
 
     if !isnothing(save_dir)
