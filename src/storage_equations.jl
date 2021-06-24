@@ -50,7 +50,8 @@ function apply_storage!(
     ϕb = JuMP.@variable(jump_model, ϕb[b in storage_names, t in time_steps], binary = true)
     pb_in = JuMP.@variable(jump_model, pb_in[b in storage_names, t in time_steps] >= 0)
     pb_out = JuMP.@variable(jump_model, pb_out[b in storage_names, t in time_steps] >= 0)
-    eb = JuMP.@variable(
+
+    optimization_container.variables[:E__GenericBattery] = eb = JuMP.@variable(
         jump_model,
         eb_lim[b].min <= eb[b in storage_names, t in time_steps] <= eb_lim[b].max
     )
