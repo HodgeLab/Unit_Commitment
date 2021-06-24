@@ -829,7 +829,9 @@ version = "0.18.2"
 
 [[PowerSimulations]]
 deps = ["CSV", "DataFrames", "DataStructures", "Dates", "HDF5", "InfrastructureSystems", "JSON", "JSON3", "JuMP", "LinearAlgebra", "Logging", "MathOptInterface", "ParameterJuMP", "Pkg", "PowerModels", "PowerSystems", "ProgressMeter", "SHA", "Serialization", "TimeSeries", "TimerOutputs"]
-path = "/Users/jdlara/.julia/dev/PowerSimulations"
+git-tree-sha1 = "963edd012e79ddf7902adf943fb6a642455f619d"
+repo-rev = "jd/add_services_ff"
+repo-url = "https://github.com/NREL-SIIP/PowerSimulations.jl.git"
 uuid = "e690365d-45e2-57bb-ac84-44ba829e73c4"
 version = "0.14.3"
 
