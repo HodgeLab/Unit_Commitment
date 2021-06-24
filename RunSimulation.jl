@@ -1,10 +1,11 @@
+#using Revise
 include("src/Unit_commitment.jl")
 ## Local
 # using Xpress
 # solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
 ## Eagle
 using Gurobi
-solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.05)
 
 ############################## First Stage Problem Definition ##############################
 formulation = isempty(ARGS) ? "D" : ARGS[1]
@@ -209,17 +210,23 @@ sequence = SimulationSequence(
             binary_source_problem = PSI.ON,
             affected_variables = [PSI.ACTIVE_POWER],
         ),
+         ("HAUC", :devices, :GenericBattery) => EnergyTargetFF(
+            variable_source_problem = PSI.ENERGY,
+            affected_variables = [PSI.ENERGY],
+            target_period = 12,  # must match energy level at the end of the hour
+            penalty_cost = 1e4, # objective function penalty
+        ),
         # This fixes the Reserve Variables
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
-            variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
-            variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
-            affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
-        ),
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-            variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
-            variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
-            affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
-        ),
+        #("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
+        #    variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
+        #    variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
+        #    affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
+        #),
+        #("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+        #    variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
+        #    variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
+        #    affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+        #),
     ),
     # How the stage initializes
     ini_cond_chronology = IntraProblemChronology(),
