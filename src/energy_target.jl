@@ -63,19 +63,17 @@ function energy_target_ff(
         value = JuMP.upper_bound(variable[name, 1])
         param_ub[name] = PSI.add_parameter(optimization_container.JuMPmodel, value)
         # default set to 1.0, as this implementation doesn't use multiplier
-        multiplier_ub[name] = 1.0
         con_ub[name] = JuMP.@constraint(
             optimization_container.JuMPmodel,
-            variable[name, target_period] + varslack[name, target_period] >=
-            param_ub[name] * multiplier_ub[name]
+            variable[name, target_period] == param_ub[name] # - varslack[name, target_period]
         )
-        PSI.linear_gen_cost!(
-            optimization_container,
-            var_name[2],
-            name,
-            penalty_cost,
-            target_period,
-        )
+        # PSI.linear_gen_cost!(
+        #      optimization_container,
+        #      var_name[2],
+        #      name,
+        #      penalty_cost,
+        #      target_period,
+        # )
     end
 end
 
