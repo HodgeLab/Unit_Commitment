@@ -290,7 +290,7 @@ function _get_initial_conditions(problem::PSI.OperationsProblem{HourAheadUnitCom
     system = PSI.get_system(problem)
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
 
-    if HAUC.ext["step"] == 1
+    if problem.ext["step"] == 1
 
         # initial conditions
         ug_t0 = Dict(
@@ -313,18 +313,10 @@ function _get_initial_conditions(problem::PSI.OperationsProblem{HourAheadUnitCom
             g in thermal_gen_names
         )
     else
-        previous_time = PSI.get_initial_time(problem) - Minute(5)
-
-        # WHAT IS THIS?
-        ug_t0 = Dict(
-            g => [previous_time, g] for
-            g in thermal_gen_names
-        )
-        # ug_t0 = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[[hour], :]
-
-        # TODO THESE TWO AREN'T CALCULATED YET
-        # time_up_t0
-        # time_down_t0
+        ug_t0 = problem.ext["init_conditions"][:ug_t0]
+        Pg_t0 = problem.ext["init_conditions"][:Pg_t0]
+        time_up_t0 = problem.ext["init_conditions"][:time_up_t0]
+        time_down_t0 = problem.ext["init_conditions"][:time_down_t0]
     end
 
     return (ug_t0, Pg_t0, time_up_t0, time_down_t0)

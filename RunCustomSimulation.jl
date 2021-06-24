@@ -183,6 +183,7 @@ end
 
 #################################### Solve Stage 2 Problem ################################
 
+init_conditions = nothing
 for h in 1:24
 
     hauc_initial_time = DateTime(initial_time) + Hour(h - 1)
@@ -202,6 +203,7 @@ for h in 1:24
     end
     HAUC.ext["UC_obj_dict"] = PSI.get_jump_model(PSI.get_optimization_container(UC)).obj_dict
     HAUC.ext["step"] = h
+    HAUC.ext["init_conditions"] = init_conditions
     
     build!(HAUC; output_dir = HAUC_output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug
     (status, solvetime) = @timed solve!(HAUC)
@@ -209,6 +211,8 @@ for h in 1:24
     if status.value != 0
         throw(ErrorException("HAUC failed at step " * string(h)))
     end
+
+    init_conditions = get_hauc_ending_conditions(HAUC)
 
     write_to_CSV(HAUC, HAUC_output_path; append = (h == 1 ? false : true), time_steps = 1:12)
 
