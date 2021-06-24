@@ -2,6 +2,10 @@
 function apply_thermal_constraints!(
     problem::PSI.OperationsProblem{T},
     spin_device_names::Vector{String},
+    ug_t0::Dict{String, Bool},
+    Pg_t0::Dict{String, Float64},
+    time_up_t0::Dict{String, Float64},
+    time_down_t0::Dict{String, Float64}
 ) where {
     T <: Union{
         CVaRReserveUnitCommitmentCC,
@@ -46,21 +50,6 @@ function apply_thermal_constraints!(
             get_name.(get_components(ThermalMultiStart, system, x -> PSY.get_must_run(x)))
     end
     startup_categories = (:hot, :warm, :cold)
-    # initial conditions
-    ug_t0 = Dict(
-        g => PSY.get_status(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
-    time_up_t0 = Dict(
-        g => ug_t0[g] * get_time_at_status(get_component(ThermalMultiStart, system, g))
-        for g in thermal_gen_names
-    )
-    time_down_t0 = Dict(
-        g =>
-            (1 - ug_t0[g]) *
-            get_time_at_status(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
 
     # ------------------------------------------------
     # Collect variables
@@ -252,7 +241,7 @@ function apply_thermal_constraints!(
         total_reserve⁻[g, t] <= pg_lim[g].max * allowable_reserve_prop
     )
 
-    _apply_thermal_scenario_based_constraints!(problem, pg_lim, ramp_up, ramp_dn, ug_t0)
+    _apply_thermal_scenario_based_constraints!(problem, pg_lim, ramp_up, ramp_dn, ug_t0, Pg_t0)
 
     return
 end
@@ -263,6 +252,7 @@ function _apply_thermal_scenario_based_constraints!(
     ramp_up::Dict{},
     ramp_dn::Dict{},
     ug_t0::Dict{},
+    Pg_t0::Dict{}
 ) where {T <: Union{CVaRReserveUnitCommitmentCC, StochasticUnitCommitmentCC}}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
@@ -279,11 +269,6 @@ function _apply_thermal_scenario_based_constraints!(
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
     pg_power_trajectory = Dict(
         g => get_power_trajectory(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
-    # This is just power (Pg), not power above minimum (pg)
-    Pg_t0 = Dict(
-        g => get_active_power(get_component(ThermalMultiStart, system, g)) for
         g in thermal_gen_names
     )
     variable_cost = Dict(
@@ -464,6 +449,7 @@ function _apply_thermal_scenario_based_constraints!(
     ramp_up::Dict{},
     ramp_dn::Dict{},
     ug_t0::Dict{},
+    Pg_t0::Dict{}
 ) where {T <: BasecaseUnitCommitmentCC}
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
@@ -479,11 +465,6 @@ function _apply_thermal_scenario_based_constraints!(
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
     pg_power_trajectory = Dict(
         g => get_power_trajectory(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
-    # This is just power (Pg), not power above minimum (pg)
-    Pg_t0 = Dict(
-        g => get_active_power(get_component(ThermalMultiStart, system, g)) for
         g in thermal_gen_names
     )
     variable_cost = Dict(

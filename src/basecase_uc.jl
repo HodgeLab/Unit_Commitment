@@ -1,6 +1,26 @@
 struct BasecaseUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
+struct HourAheadUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
 function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmentCC};)
+    ug_t0, Pg_t0, time_up_t0, time_down_t0 = _get_initial_conditions(problem)
+
+    _build_basecase_internal(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
+end
+
+function PSI.problem_build!(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
+    ug_t0, Pg_t0, time_up_t0, time_down_t0 = _get_initial_conditions(problem)
+
+    _build_basecase_internal(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
+
+    _enforce_ha_commitments!(problem)
+end
+
+function _build_basecase_internal!(problem::PSI.OperationsProblem{T},
+    ug_t0::Dict{String, Bool},
+    Pg_t0::Dict{String, Float64},
+    time_up_t0::Dict{String, Float64},
+    time_down_t0::Dict{String, Float64}
+    ) where T <: Union{BasecaseUnitCommitmentCC, HourAheadUnitCommitmentCC}
     use_storage = problem.ext["use_storage"]
     use_storage_reserves = problem.ext["use_storage_reserves"]
     storage_reserve_names = problem.ext["storage_reserve_names"]
@@ -173,7 +193,12 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
 
     apply_wind!(problem, required_reg⁺, required_reg⁻, required_spin)
 
-    apply_thermal_constraints!(problem, spin_device_names)
+    apply_thermal_constraints!(problem,
+        spin_device_names,
+        ug_t0,
+        Pg_t0,
+        time_up_t0,
+        time_down_t0)
     Cg = optimization_container.expressions[:Cg]
 
     if use_storage
@@ -230,4 +255,51 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmen
             C_ener_penalty * sum(slack_energy⁺[t] + slack_energy⁻[t] for t in time_steps) : 0
         )
     )
+end
+
+function _get_initial_conditions(problem::PSI.OperationsProblem{BasecaseUnitCommitmentCC};)
+
+    system = PSI.get_system(problem)
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+
+    # initial conditions
+    ug_t0 = Dict(
+        g => PSY.get_status(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
+    time_up_t0 = Dict(
+        g => ug_t0[g] * get_time_at_status(get_component(ThermalMultiStart, system, g))
+        for g in thermal_gen_names
+    )
+    time_down_t0 = Dict(
+        g =>
+            (1 - ug_t0[g]) *
+            get_time_at_status(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
+    # This is just power (Pg), not power above minimum (pg)
+    Pg_t0 = Dict(
+        g => get_active_power(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
+
+    return (ug_t0, Pg_t0, time_up_t0, time_down_t0)
+end
+
+function _get_initial_conditions(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
+    # TODO
+
+    return (ug_t0, Pg_t0, time_up_t0, time_down_t0)
+end
+
+function _enforce_ha_commitments!(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
+    # TODO
+
+    # 1) on/off
+
+    # 2) reg up/down and spin for thermal and battery
+
+    # 3) pb_in/pb_out
+
+
 end
