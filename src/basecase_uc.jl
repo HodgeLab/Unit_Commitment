@@ -2,24 +2,16 @@ struct BasecaseUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 struct HourAheadUnitCommitmentCC <: PSI.PowerSimulationsOperationsProblem end
 
 function PSI.problem_build!(problem::PSI.OperationsProblem{BasecaseUnitCommitmentCC};)
-    ug_t0, Pg_t0, time_up_t0, time_down_t0 = _get_initial_conditions(problem)
-
-    _build_basecase_internal!(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
+    _build_basecase_internal!(problem)
 end
 
 function PSI.problem_build!(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
-    ug_t0, Pg_t0, time_up_t0, time_down_t0 = _get_initial_conditions(problem)
-
-    _build_basecase_internal!(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
+    _build_basecase_internal!(problem)
 
     _enforce_ha_commitments!(problem)
 end
 
-function _build_basecase_internal!(problem::PSI.OperationsProblem{T},
-    ug_t0::Dict{String, Bool},
-    Pg_t0::Dict{String, Float64},
-    time_up_t0::Dict{String, Float64},
-    time_down_t0::Dict{String, Float64}
+function _build_basecase_internal!(problem::PSI.OperationsProblem{T}
     ) where T <: Union{BasecaseUnitCommitmentCC, HourAheadUnitCommitmentCC}
     use_storage = problem.ext["use_storage"]
     use_storage_reserves = problem.ext["use_storage_reserves"]
@@ -47,6 +39,11 @@ function _build_basecase_internal!(problem::PSI.OperationsProblem{T},
     jump_model = PSI.get_jump_model(optimization_container)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
     case_initial_time = PSI.get_initial_time(problem)
+
+    ug_t0 = problem.ext["init_conditions"][:ug_t0]
+    Pg_t0 = problem.ext["init_conditions"][:Pg_t0]
+    time_up_t0 = problem.ext["init_conditions"][:time_up_t0]
+    time_down_t0 = problem.ext["init_conditions"][:time_down_t0]
 
     # -------------------------------------------------------------
     # Collect definitions from PSY model
@@ -257,71 +254,6 @@ function _build_basecase_internal!(problem::PSI.OperationsProblem{T},
     )
 end
 
-function _get_initial_conditions(problem::PSI.OperationsProblem{BasecaseUnitCommitmentCC};)
-
-    system = PSI.get_system(problem)
-    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
-
-    # initial conditions
-    ug_t0 = Dict(
-        g => PSY.get_status(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
-    time_up_t0 = Dict(
-        g => ug_t0[g] * get_time_at_status(get_component(ThermalMultiStart, system, g))
-        for g in thermal_gen_names
-    )
-    time_down_t0 = Dict(
-        g =>
-            (1 - ug_t0[g]) *
-            get_time_at_status(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
-    # This is just power (Pg), not power above minimum (pg)
-    Pg_t0 = Dict(
-        g => get_active_power(get_component(ThermalMultiStart, system, g)) for
-        g in thermal_gen_names
-    )
-
-    return (ug_t0, Pg_t0, time_up_t0, time_down_t0)
-end
-
-function _get_initial_conditions(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
-    system = PSI.get_system(problem)
-    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
-
-    if problem.ext["step"] == 1
-
-        # initial conditions
-        ug_t0 = Dict(
-            g => PSY.get_status(get_component(ThermalMultiStart, system, g)) for
-            g in thermal_gen_names
-        )
-        time_up_t0 = Dict(
-            g => ug_t0[g] * get_time_at_status(get_component(ThermalMultiStart, system, g))
-            for g in thermal_gen_names
-        )
-        time_down_t0 = Dict(
-            g =>
-                (1 - ug_t0[g]) *
-                get_time_at_status(get_component(ThermalMultiStart, system, g)) for
-            g in thermal_gen_names
-        )
-        # This is just power (Pg), not power above minimum (pg)
-        Pg_t0 = Dict(
-            g => get_active_power(get_component(ThermalMultiStart, system, g)) for
-            g in thermal_gen_names
-        )
-    else
-        ug_t0 = problem.ext["init_conditions"][:ug_t0]
-        Pg_t0 = problem.ext["init_conditions"][:Pg_t0]
-        time_up_t0 = problem.ext["init_conditions"][:time_up_t0]
-        time_down_t0 = problem.ext["init_conditions"][:time_down_t0]
-    end
-
-    return (ug_t0, Pg_t0, time_up_t0, time_down_t0)
-end
-
 function _enforce_ha_commitments!(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
     h = problem.ext["step"]
     DA_obj_dict = problem.ext["UC_obj_dict"]
@@ -394,4 +326,104 @@ function _enforce_ha_commitments!(problem::PSI.OperationsProblem{HourAheadUnitCo
         )
     end
 
+end
+
+function get_first_init_conditions(system)
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+
+    # initial conditions
+    ug_t0 = Dict(
+        g => PSY.get_status(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
+    time_up_t0 = Dict(
+        g => ug_t0[g] * get_time_at_status(get_component(ThermalMultiStart, system, g))
+        for g in thermal_gen_names
+    )
+    time_down_t0 = Dict(
+        g =>
+            (1 - ug_t0[g]) *
+            get_time_at_status(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
+    # This is just power (Pg), not power above minimum (pg)
+    Pg_t0 = Dict(
+        g => get_active_power(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
+
+    return Dict{Symbol, Dict}(
+        :ug_t0 => ug_t0,
+        :Pg_t0 => Pg_t0,
+        :time_up_t0 => time_up_t0,
+        :time_down_t0 => time_down_t0
+        )
+end
+
+function get_hauc_ending_conditions(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC})
+    system = PSI.get_system(problem)
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+    optimization_container = PSI.get_optimization_container(problem)
+    obj_dict = PSI.get_jump_model(optimization_container).obj_dict
+
+    ug_df = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[[12], :]
+    ug_t0 = Dict(
+            g => convert(Bool, ug_df[1, g]) for
+            g in thermal_gen_names
+        )
+
+    Pg_t0_df = get_thermal_generator_power_dataframe(problem, 12:12, nothing)
+    Pg_t0 = Dict(
+        g => Pg_t0_df[1, g] for
+        g in thermal_gen_names
+    )
+
+    ug_df = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[1:12, :]
+    time_up_t0 = Dict(
+        g => get_new_time_up(problem, ug_df, g)
+        for g in thermal_gen_names
+    )
+    time_down_t0 = Dict(
+        g => get_new_time_down(problem, ug_df, g)
+        for g in thermal_gen_names
+    )
+
+    return Dict{Symbol, Dict}(
+        :ug_t0 => ug_t0,
+        :Pg_t0 => Pg_t0,
+        :time_up_t0 => time_up_t0,
+        :time_down_t0 => time_down_t0
+        )
+end
+
+function get_new_time_down(problem, ug_df, g)
+    MINS_IN_HOUR = 60.0
+    Δt = Minute(PSI.model_resolution(PSI.get_optimization_container(problem))).value / MINS_IN_HOUR
+
+    if round(ug_df[12, g]) == 0.0
+        # If it has down the whole time, add 1 hour to down time
+        if all(round.(ug_df[:, g]) .== 0.0)
+            return problem.ext["init_conditions"][:time_down_t0][g] + 1.0
+        else
+            return first(findall(reverse(round.(ug_df[:, g])) .== 1.0)) * Δt
+        end
+    else
+        return 0.0
+    end
+end
+
+function get_new_time_up(problem, ug_df, g)
+    MINS_IN_HOUR = 60.0
+    Δt = Minute(PSI.model_resolution(PSI.get_optimization_container(problem))).value / MINS_IN_HOUR
+
+    if round(ug_df[12, g]) == 1.0
+        # If it has up the whole time, add 1 hour to up time
+        if all(round.(ug_df[:, g]) .== 1.0)
+            return problem.ext["init_conditions"][:time_up_t0][g] + 1.0
+        else
+            return first(findall(reverse(round.(ug_df[:, g])) .== 0.0)) * Δt
+        end
+    else
+        return 0.0
+    end
 end

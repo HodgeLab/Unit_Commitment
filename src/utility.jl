@@ -338,36 +338,3 @@ function save_as_initial_condition(problem::PSI.OperationsProblem{T}, fname, hou
     ug = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[[hour], :]
     CSV.write(fname, ug)
 end
-
-
-
-
-function get_hauc_ending_conditions(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC})
-    system = PSI.get_system(problem)
-    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
-    optimization_container = PSI.get_optimization_container(problem)
-    obj_dict = PSI.get_jump_model(optimization_container).obj_dict
-
-    ug_df = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[[12], :]
-    ug_t0 = Dict(
-            g => convert(Bool, ug_df[1, g]) for
-            g in thermal_gen_names
-        )
-
-    Pg_t0_df = get_thermal_generator_power_dataframe(problem, 12:12, nothing)
-    Pg_t0 = Dict(
-        g => Pg_t0_df[1, g] for
-        g in thermal_gen_names
-    )
-
-    # TODO THESE TWO AREN'T CALCULATED YET
-        time_up_t0 = Dict()
-        time_down_t0 = Dict()
-
-    return Dict{Symbol, Dict}(
-        :ug_t0 => ug_t0,
-        :Pg_t0 => Pg_t0,
-        :time_up_t0 => time_up_t0,
-        :time_down_t0 => time_down_t0
-        )
-end

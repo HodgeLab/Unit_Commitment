@@ -152,24 +152,7 @@ UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
 UC.ext["supp_type"] = supp_type
 UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
-
-#################################### Stage 2 problem Definition, HAUC ########################
-system_ha = System(
-    joinpath(system_file_path, "HA_sys_UC_experiment.json");
-    time_series_read_only = true,
-)
-
-apply_manual_data_updates!(system_ha, use_nuclear, initial_cond_file)
-
-template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
-set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
-set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
-# Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
-set_device_model!(template_hauc, HydroDispatch, FixedOutput)
-set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
-set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
-set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
-set_device_model!(template_hauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
+UC.ext["init_conditions"] = get_first_init_conditions(system_da)
 
 #################################### Solve Stage 1 Problem ################################
 
@@ -181,11 +164,28 @@ if status.value != 0
     throw(ErrorException("DAUC failed"))
 end
 
+#################################### Stage 2 problem Definition, HAUC ########################
+system_ha = System(
+    joinpath(system_file_path, "HA_sys_UC_experiment.json");
+    time_series_read_only = true,
+)
+
+apply_manual_data_updates!(system_ha, use_nuclear, initial_cond_file)
+init_conditions = get_first_init_conditions(system_ha)
+
+template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
+set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
+set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
+# Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
+set_device_model!(template_hauc, HydroDispatch, FixedOutput)
+set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
+set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
+set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+set_device_model!(template_hauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
+
 #################################### Solve Stage 2 Problem ################################
 
-init_conditions = nothing
 for h in 1:24
-
     hauc_initial_time = DateTime(initial_time) + Hour(h - 1)
 
     HAUC = OperationsProblem(
