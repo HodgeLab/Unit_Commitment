@@ -1,10 +1,11 @@
+using Revise
 include("src/Unit_commitment.jl")
 ## Local
 # using Xpress
 # solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
 ## Eagle
 using Gurobi
-solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.05)
 
 ############################## First Stage Problem Definition ##############################
 formulation = isempty(ARGS) ? "D" : ARGS[1]
@@ -169,7 +170,7 @@ set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
 # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
 set_device_model!(template_hauc, HydroDispatch, FixedOutput)
-set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve)) #; use_service_name = true))
+set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
 ### Using Dispatch here, not the same as above
@@ -181,12 +182,10 @@ HAUC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = false,
-    #services_slack_variables = true,
+    services_slack_variables = true,
     balance_slack_variables = true,
     system_to_file = false,
 )
-
-#build!(HAUC; output_dir = mktempdir())
 
 #################################### Simulation Definition ################################
 
@@ -209,6 +208,12 @@ sequence = SimulationSequence(
             binary_source_problem = PSI.ON,
             affected_variables = [PSI.ACTIVE_POWER],
         ),
+         ("HAUC", :devices, :GenericBattery) => EnergyTargetFF(
+            variable_source_problem = PSI.ENERGY,
+            affected_variables = [PSI.ENERGY],
+            target_period = 12,  # must match energy level at the end of the hour
+            penalty_cost = 1e4, # objective function penalty
+        ),
         # This fixes the Reserve Variables
         ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
             variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
@@ -219,6 +224,11 @@ sequence = SimulationSequence(
             variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
             variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
             affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+        ),
+        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+            variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
+            variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
+            affected_variables = ["SPIN__VariableReserve_ReserveUp"],
         ),
     ),
     # How the stage initializes
