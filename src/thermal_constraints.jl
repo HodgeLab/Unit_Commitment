@@ -31,6 +31,7 @@ function apply_thermal_constraints!(
     # Input data
     # ------------------------------------------------
     MINS_IN_HOUR = 60.0
+    Δt = Minute(resolution).value / MINS_IN_HOUR
     thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
     pg_lim = Dict(
         g => get_active_power_limits(get_component(ThermalMultiStart, system, g)) for
@@ -40,11 +41,11 @@ function apply_thermal_constraints!(
     get_rmp_dn_limit(g) = PSY.get_ramp_limits(g).down
     ramp_up = Dict(
         g =>
-            get_rmp_up_limit(get_component(ThermalMultiStart, system, g)) * MINS_IN_HOUR for g in thermal_gen_names
+            get_rmp_up_limit(get_component(ThermalMultiStart, system, g)) * Δt * MINS_IN_HOUR for g in thermal_gen_names
     )
     ramp_dn = Dict(
         g =>
-            get_rmp_dn_limit(get_component(ThermalMultiStart, system, g)) * MINS_IN_HOUR for g in thermal_gen_names
+            get_rmp_dn_limit(get_component(ThermalMultiStart, system, g)) * Δt * MINS_IN_HOUR for g in thermal_gen_names
     )
     if use_must_run
         must_run_gen_names =
@@ -202,23 +203,6 @@ function apply_thermal_constraints!(
         [g in thermal_gen_names, t in time_steps],
         vg[g, t] == sum(δ_sg[g, s, t] for s in startup_categories)
     )
-
-    # if use_reg
-    #     reg⁺ = jump_model.obj_dict[:reg⁺]
-    #     reg⁻ = jump_model.obj_dict[:reg⁻]
-    #     # Reg up response time
-    #     reg⁺_response_constraints = JuMP.@constraint(
-    #         jump_model,
-    #         [g in reg⁺_device_names, t in time_steps],
-    #         reg⁺[g, t] <= L_REG * ramp_up[g]
-    #     )
-    #     # Reg down response time
-    #     reg⁻_response_constraints = JuMP.@constraint(
-    #         jump_model,
-    #         [g in reg⁻_device_names, t in time_steps],
-    #         reg⁻[g, t] <= L_REG * ramp_dn[g]
-    #     )
-    # end
 
     if use_spin
         spin = jump_model.obj_dict[:spin]
