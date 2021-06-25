@@ -126,7 +126,16 @@ function apply_thermal_constraints!(
         time_steps,
     )
     for g in thermal_gen_names, t in time_steps
-        time_limits = get_time_limits(get_component(ThermalMultiStart, system, g))
+        time_limits_in_hr = get_time_limits(get_component(ThermalMultiStart, system, g))
+
+        # Hack to convert to number of time-steps from _convert_hours_to_timesteps
+        time_limits = NamedTuple{(:up, :down)}((
+            _convert_to_timesteps(time_limits_in_hr[:up], resolution),
+            _convert_to_timesteps(time_limits_in_hr[:down], resolution)
+        ))
+
+        timesteps_up_t0 = _convert_to_timesteps(time_up_t0[g], resolution)
+        timesteps_down_t0 = _convert_to_timesteps(time_down_t0[g], resolution)
 
         lhs_on = JuMP.AffExpr(0)
         if t in UnitRange{Int}(
@@ -138,7 +147,7 @@ function apply_thermal_constraints!(
                     JuMP.add_to_expression!(lhs_on, vg[g, i])
                 end
             end
-        elseif t <= max(0, time_limits[:up] - time_up_t0[g]) && time_up_t0[g] > 0
+        elseif t <= max(0, time_limits[:up] - timesteps_up_t0) && timesteps_up_t0 > 0
             JuMP.add_to_expression!(lhs_on, 1)
         else
             continue
@@ -155,7 +164,7 @@ function apply_thermal_constraints!(
                     JuMP.add_to_expression!(lhs_off, wg[g, i])
                 end
             end
-        elseif t <= max(0, time_limits[:down] - time_down_t0[g]) && time_down_t0[g] > 0
+        elseif t <= max(0, time_limits[:down] - timesteps_down_t0) && timesteps_down_t0 > 0
             JuMP.add_to_expression!(lhs_off, 1)
         else
             continue
@@ -178,6 +187,8 @@ function apply_thermal_constraints!(
             get_start_time_limits(get_component(ThermalMultiStart, system, g)),
             resolution,
         )
+        timesteps_down_t0 = _convert_to_timesteps(time_down_t0[g], resolution)
+
         if t >= g_startup[si + 1]
             time_range = UnitRange{Int}(Int(g_startup[si]), Int(g_startup[si + 1] - 1))
             startup_lag_constraints[g, startup, t] = JuMP.@constraint(
@@ -188,7 +199,7 @@ function apply_thermal_constraints!(
 
         # Initial start-up type, based on Tight and Compact eq (15) rather than pg_lib (7)
         # Xpress version adds extra constraints because it's not enforcing the fix
-        if (g_startup[si + 1] - time_down_t0[g]) < t && t < g_startup[si + 1]
+        if (g_startup[si + 1] - timesteps_down_t0) < t && t < g_startup[si + 1]
             if JuMP.solver_name(jump_model) == "Xpress"
                 JuMP.@constraint(jump_model, δ_sg[g, startup, t] <= 0)
             else
@@ -588,4 +599,9 @@ function _apply_thermal_scenario_based_constraints!(
     # Does not need to be implemented while reg⁺ and spin groups are mutually exclusive
 
     return
+end
+
+function _convert_to_timesteps(t, resolution)
+    MINS_IN_HOUR = 60.0
+    return round((t * MINS_IN_HOUR) / Dates.value(Dates.Minute(resolution)), RoundUp)
 end
