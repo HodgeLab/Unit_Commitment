@@ -5,7 +5,7 @@ plotlyjs()
 
 ## Local
 using Xpress
-solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.01) # MIPRELSTOP was  0.0001
 ## Eagle
 # using Gurobi
 # solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
@@ -70,6 +70,7 @@ scenario_plot_dict = Dict{String, Vector{Int64}}(
 #         initial_time = "2018-" * (month < 10 ? "0" * string(month) : string(month)) *
 #             "-" * string(d) * "T00:00:00"
 
+# Solve the DAY BEFORE to get initial conditions
 for initial_time in keys(scenario_plot_dict)
     output_path =
         "./results/" *
@@ -94,7 +95,7 @@ for initial_time in keys(scenario_plot_dict)
         template_dauc,
         system_da,
         optimizer = solver,
-        initial_time = DateTime(initial_time),
+        initial_time = DateTime(initial_time) - Day(1),
         optimizer_log_print = true,
         balance_slack_variables = false,
     )
@@ -130,7 +131,7 @@ for initial_time in keys(scenario_plot_dict)
     (status, solvetime) = @timed solve!(UC)
 
     if status.value == 0
-        hour = 3
+        hour = 24
         print(initial_time * " solved")
         save_as_initial_condition(
             UC,

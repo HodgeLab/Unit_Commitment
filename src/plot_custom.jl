@@ -61,6 +61,8 @@ function PG.plot_fuel(
     y_label = get(kwargs, :y_label, "Generation (GW)")
 
     seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(fuel_agg, backend))
+    DataFrames.rename!(fuel_agg, Dict("Natural gas" => "NG-CT (solo)"))
+    DataFrames.rename!(fuel_agg, Dict("NG-CT" => "NG-CT (in CC train)"))
     p = plot_dataframe(
         fuel_agg,
         gen.time;
@@ -373,6 +375,8 @@ function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System; kwa
     y_label = "Generation (GW)"
 
     seriescolor = PG.match_fuel_colors(fuel_agg, backend)
+    DataFrames.rename!(fuel_agg, Dict("Natural gas" => "NG-CT (solo)"))
+    DataFrames.rename!(fuel_agg, Dict("NG-CT" => "NG-CT (in CC train)"))
     p = plot_dataframe(
         fuel_agg,
         gen.time[time_steps];
