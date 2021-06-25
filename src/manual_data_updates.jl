@@ -23,7 +23,7 @@ function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
     # Overwrite with initial conditions, tailored by day
     initial_on = CSV.read(initial_cond_file, DataFrames.DataFrame)
     for g in PowerSystems.get_components(PowerSystems.ThermalMultiStart, system)
-        new_on = Bool(initial_on[1, get_name(g)])
+        new_on = Bool(round(initial_on[1, get_name(g)]))
         set_status!(g, new_on)
         if !new_on
             set_active_power!(g, 0.0)
