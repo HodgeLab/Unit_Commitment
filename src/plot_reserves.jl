@@ -9,15 +9,11 @@ function plot_reserve(
         StochasticUnitCommitmentCC,
     },
 }
-    title = get(kwargs, :title, reserve_name)
-    save_dir = get(kwargs, :save_dir, nothing)
+
     time_steps = get(kwargs, :time_steps, nothing)
     use_solar_reg = problem.ext["use_solar_reg"]
     use_solar_spin = problem.ext["use_solar_spin"]
     use_wind_reserves = problem.ext["use_wind_reserves"]
-
-    p = PG._empty_plot()
-    backend = Plots.backend()
 
     system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
@@ -78,7 +74,6 @@ function plot_reserve(
         throw(ArgumentError("Allowable reserve names are REG_UP, REG_DN, or SPIN"))
     end
 
-    device_names = get_name.(get_contributing_devices(system, reserve))
     required_reserve = get_time_series_values(
         Deterministic,
         reserve,
@@ -91,20 +86,38 @@ function plot_reserve(
 
     reserves = my_categorize_reserves(gen.data, cat, sym_dict, storage)
 
+    res_req = DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
+        get_base_power(system)
+
+    p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs)
+    return p
+end
+
+function _plot_reserve_internal(reserves,
+    res_req,
+    timestamps,
+    sym_dict,
+    use_slack;
+    kwargs...
+    )
+    title = get(kwargs, :title, reserve_name)
+    save_dir = get(kwargs, :save_dir, nothing)
+
+    p = PG._empty_plot()
+    backend = Plots.backend()
+
     # Hack to make nuclear on the bottom and curtailment on top
     cat_names = intersect(PG.CATEGORY_DEFAULT, keys(reserves))
     cat_names = [
         cat_names[2],
         cat_names[1],
-        cat_names[3:(end - 2)]...,
-        cat_names[end],
-        cat_names[end - 1],
+        cat_names[3:end]...
     ]
     reserves_agg = PG.combine_categories(reserves; names = cat_names)
 
-    y_label = get(kwargs, :y_label, "Reserves (MW)")
+    y_label = "Reserves (MW)"
 
-    seriescolor = get(kwargs, :seriescolor, PG.match_fuel_colors(reserves_agg, backend))
+    seriescolor = PG.match_fuel_colors(reserves_agg, backend)
     if "supp" in keys(sym_dict)
         DataFrames.rename!(reserves_agg, Dict("Imports/Exports" => "Supplemental"))
     end
@@ -113,7 +126,7 @@ function plot_reserve(
     end
     p = plot_dataframe(
         reserves_agg,
-        gen.time;
+        timestamps;
         seriescolor = seriescolor,
         y_label = y_label,
         title = nothing,
@@ -123,28 +136,31 @@ function plot_reserve(
         kwargs...,
     )
 
-    kwargs = Dict{Symbol, Any}((k, v) for (k, v) in kwargs if k ∉ [:nofill, :seriescolor])
-    kwargs[:linestyle] = get(kwargs, :linestyle, :dash)
-    kwargs[:linewidth] = get(kwargs, :linewidth, 3)
+    if !isnothing(res_req)
+        kwargs = Dict{Symbol, Any}((k, v) for (k, v) in kwargs if k ∉ [:nofill, :seriescolor])
+        kwargs[:linestyle] = get(kwargs, :linestyle, :dash)
+        kwargs[:linewidth] = get(kwargs, :linewidth, 3)
 
-    # Add reserve line
-    res_req =
-        DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
-        get_base_power(system)
+        # Add reserve line
+        p = plot_dataframe(
+            p,
+            res_req,
+            timestamps;
+            seriescolor = ["black"],
+            y_label = y_label,
+            title = nothing,
+            stack = true,
+            nofill = true,
+            set_display = false,
+            stair = true,
+            kwargs...,
+        )
+    end
 
-    p = plot_dataframe(
-        p,
-        res_req,
-        gen.time;
-        seriescolor = ["black"],
-        y_label = y_label,
-        title = nothing,
-        stack = true,
-        nofill = true,
-        set_display = false,
-        stair = true,
-        kwargs...,
-    )
+    # Overwrite x axis label
+    layout_kwargs =
+        Dict{Symbol, Any}(:xaxis => Plots.PlotlyJS.attr(; title = "Time of Day"))
+    Plots.PlotlyJS.relayout!(p, Plots.PlotlyJS.Layout(; layout_kwargs...))
 
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
@@ -320,4 +336,102 @@ function _get_reserve_save_path(
 ) where {T <: BasecaseUnitCommitmentCC}
     fname = joinpath(save_dir, "$title.$format")
     return fname
+end
+
+################################# Stage 2 ###############################################
+
+function plot_stage2_reserves(
+    res::PSI.SimulationProblemResults,
+    system::PSY.System,
+    reserve_name::String;
+    kwargs...)
+
+    use_slack = get(kwargs, :use_slack, true)
+
+    sym_dict = Dict{String, Symbol}()
+    if reserve_name == "REG_UP"
+        sym_dict["reserve"] = :REG_UP__VariableReserve_ReserveUp
+        if use_slack
+            sym_dict["slack"] = :γ⁺__REG_UP
+        end
+    elseif reserve_name == "REG_DN"
+        sym_dict["reserve"] = :REG_DN__VariableReserve_ReserveDown
+        if use_slack
+            sym_dict["slack"] = :γ⁺__REG_DN
+        end
+    elseif reserve_name == "SPIN"
+        sym_dict["reserve"] = :SPIN__VariableReserve_ReserveUp
+        if use_slack
+            sym_dict["slack"] = :γ⁺__SPIN
+        end
+    else
+        throw(ArgumentError("Allowable reserve names are REG_UP, REG_DN, or SPIN"))
+    end
+
+    gen = get_reserve_data(res, sym_dict, system)
+    categories = make_fuel_dictionary(system)
+
+    reserves = my_categorize_stage2_reserves(gen.data, categories, sym_dict)
+
+    # TODO HOW?
+    res_req = nothing
+
+    p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs)
+    return p
+end
+
+function get_reserve_data(
+    res::PSI.SimulationProblemResults,
+    sym_dict::Dict,
+    system::PSY.System
+)
+    variables = Dict{Symbol, DataFrames.DataFrame}()
+    variables[sym_dict["reserve"]] = read_realized_variables(res, names = [sym_dict["reserve"]])[sym_dict["reserve"]]
+    if "slack" in keys(sym_dict)
+        variables[sym_dict["slack"]] = read_realized_variables(res, names = [sym_dict["slack"]])[sym_dict["slack"]]
+    end
+
+    # Scale from 100 MW to MW
+    for v in keys(variables)
+        variables[v][:, setdiff(names(variables[v]), ["DateTime"])] .*=
+            get_base_power(system)
+    end
+
+    timestamps = get_realized_timestamps(res)
+    return PG.PGData(variables, timestamps)
+end
+
+function my_categorize_stage2_reserves(
+    data::Dict{Symbol, DataFrames.DataFrame},
+    categories::Dict,
+    sym_dict::Dict
+)
+    category_dataframes = Dict{String, DataFrames.DataFrame}()
+    var_types = Dict([("ThermalMultiStart", sym_dict["reserve"])])
+    var_types["GenericBattery"] = sym_dict["reserve"]
+    var_types["PV"] = sym_dict["reserve"]
+    for (category, list) in categories
+        category_df = DataFrames.DataFrame()
+        for atuple in list
+            if haskey(var_types, atuple[1])
+                category_data = data[var_types[atuple[1]]]
+                colname =
+                    typeof(names(category_data)[1]) == String ? "$(atuple[2])" :
+                    Symbol(atuple[2])
+                if colname in names(category_data)
+                    DataFrames.insertcols!(
+                        category_df,
+                        (colname => category_data[:, colname]),
+                        makeunique = true,
+                    )
+                end
+            end
+        end
+        category_dataframes[string(category)] = category_df
+    end
+    if "slack" in keys(sym_dict)
+        category_dataframes["Unserved Energy"] = data[sym_dict["slack"]]
+    end
+
+    return category_dataframes
 end
