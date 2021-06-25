@@ -223,7 +223,7 @@ sequence = SimulationSequence(
         ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
             variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
             variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
-            affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
+            affected_variables = ["REG_DN__VariableReserve_ReserveDown"],
         ),
         ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
             variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
