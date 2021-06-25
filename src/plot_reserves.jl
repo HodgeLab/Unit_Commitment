@@ -138,6 +138,8 @@ function _plot_reserve_internal(
     if use_slack
         DataFrames.rename!(reserves_agg, Dict("Unserved Energy" => "Unserved Reserves"))
     end
+    DataFrames.rename!(reserves_agg, Dict("Natural gas" => "NG-CT (solo)"))
+    DataFrames.rename!(reserves_agg, Dict("NG-CT" => "NG-CT (in CC train)"))
     p = plot_dataframe(
         reserves_agg,
         timestamps;
