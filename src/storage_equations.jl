@@ -13,6 +13,9 @@ function apply_storage!(
     time_steps = PSI.model_time_steps(optimization_container)
     jump_model = PSI.get_jump_model(optimization_container)
     system = PSI.get_system(problem)
+    resolution = PSI.model_resolution(optimization_container)
+    MINS_IN_HOUR = 60.0
+    Δt = Minute(resolution).value / MINS_IN_HOUR
 
     storage_names = PSY.get_name.(get_components(PSY.GenericBattery, system))
 
@@ -79,30 +82,25 @@ function apply_storage!(
             storage_energy_balance[b, 1] = JuMP.@constraint(
                 jump_model,
                 eb[b, 1] ==
-                eb_t0[b] + η[b].in * pb_in[b, 1] - (1 / η[b].out) * pb_out[b, 1]
+                eb_t0[b] + (η[b].in * pb_in[b, 1] - (1 / η[b].out) * pb_out[b, 1]) * Δt
             )
         else
             storage_energy_balance[b, t] = JuMP.@constraint(
                 jump_model,
                 eb[b, t] ==
-                eb[b, t - 1] + η[b].in * pb_in[b, t] - (1 / η[b].out) * pb_out[b, t]
+                eb[b, t - 1] + (η[b].in * pb_in[b, t] - (1 / η[b].out) * pb_out[b, t]) * Δt
             )
         end
     end
 
     if use_storage_reserves
         # Storage energy satisfies reserve deployment period
-        storage_⁺_response_constraints = JuMP.@constraint(
-            jump_model,
-            [b in storage_reserve_names, t in time_steps],
-            η[b].out * (eb[b, t] - eb_lim[b].min) >=
-            (use_reg ? L_REG * reg⁺[b, t] : 0) + (use_spin ? L_SPIN * spin[b, t] : 0)
-        )
-        if use_reg
-            storage_⁻_response_constraints = JuMP.@constraint(
+        if use_spin
+            storage_⁺_response_constraints = JuMP.@constraint(
                 jump_model,
                 [b in storage_reserve_names, t in time_steps],
-                (1 / η[b].in) * (eb_lim[b].max - eb[b, t]) >= L_REG * reg⁻[b, t]
+                η[b].out * (eb[b, t] - eb_lim[b].min) >=
+                L_SPIN * spin[b, t]
             )
         end
 
