@@ -9,6 +9,8 @@ function plot_reserve(
         StochasticUnitCommitmentCC,
     },
 }
+    title = get(kwargs, :title, reserve_name)
+    save_dir = get(kwargs, :save_dir, nothing)
 
     time_steps = get(kwargs, :time_steps, nothing)
     use_solar_reg = problem.ext["use_solar_reg"]
@@ -89,19 +91,31 @@ function plot_reserve(
     res_req = DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
         get_base_power(system)
 
-    p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs)
+    p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs...)
+
+    if !isnothing(save_dir)
+        title = replace(title, " " => "_")
+        for format in ("png", "pdf")
+            fname = _get_reserve_save_path(problem, title, format, save_dir; kwargs...)
+            # Overwrite existing plots
+            if isfile(fname)
+                rm(fname)
+            end
+            PG.save_plot(p, fname, Plots.backend())
+        end
+    end
+
     return p
 end
 
-function _plot_reserve_internal(reserves,
+function _plot_reserve_internal(
+    reserves,
     res_req,
     timestamps,
     sym_dict,
     use_slack;
     kwargs...
     )
-    title = get(kwargs, :title, reserve_name)
-    save_dir = get(kwargs, :save_dir, nothing)
 
     p = PG._empty_plot()
     backend = Plots.backend()
@@ -162,17 +176,6 @@ function _plot_reserve_internal(reserves,
         Dict{Symbol, Any}(:xaxis => Plots.PlotlyJS.attr(; title = "Time of Day"))
     Plots.PlotlyJS.relayout!(p, Plots.PlotlyJS.Layout(; layout_kwargs...))
 
-    if !isnothing(save_dir)
-        title = replace(title, " " => "_")
-        for format in ("png", "pdf")
-            fname = _get_reserve_save_path(problem, title, format, save_dir; kwargs...)
-            # Overwrite existing plots
-            if isfile(fname)
-                rm(fname)
-            end
-            PG.save_plot(p, fname, backend)
-        end
-    end
     return p
 end
 
@@ -345,7 +348,8 @@ function plot_stage2_reserves(
     system::PSY.System,
     reserve_name::String;
     kwargs...)
-
+    title = get(kwargs, :title, reserve_name)
+    save_dir = get(kwargs, :save_dir, nothing)
     use_slack = get(kwargs, :use_slack, true)
 
     sym_dict = Dict{String, Symbol}()
@@ -376,7 +380,20 @@ function plot_stage2_reserves(
     # TODO HOW?
     res_req = nothing
 
-    p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs)
+    p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs...)
+
+    if !isnothing(save_dir)
+        title = replace(title, " " => "_")
+        for format in ("png", "pdf")
+            fname = joinpath(save_dir, "$title.$format")
+            # Overwrite existing plots
+            if isfile(fname)
+                rm(fname)
+            end
+            PG.save_plot(p, fname, Plots.backend())
+        end
+    end
+
     return p
 end
 
