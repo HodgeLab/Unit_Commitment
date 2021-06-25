@@ -12,7 +12,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{HourAheadUnitCommitme
 
     _build_basecase_internal!(problem, ug_t0, Pg_t0, time_up_t0, time_down_t0)
 
-    # _enforce_ha_commitments!(problem)
+    _enforce_ha_commitments!(problem)
 end
 
 function _build_basecase_internal!(problem::PSI.OperationsProblem{T},
@@ -323,13 +323,75 @@ function _get_initial_conditions(problem::PSI.OperationsProblem{HourAheadUnitCom
 end
 
 function _enforce_ha_commitments!(problem::PSI.OperationsProblem{HourAheadUnitCommitmentCC};)
-    # TODO
+    h = problem.ext["step"]
+    DA_obj_dict = problem.ext["UC_obj_dict"]
+
+    optimization_container = PSI.get_optimization_container(problem)
+    jump_model = PSI.get_jump_model(optimization_container)
+    obj_dict = jump_model.obj_dict
+
+    # Collect HA variables
+    ug = obj_dict[:ug]
+    reg⁺ = obj_dict[:reg⁺]
+    reg⁻ = obj_dict[:reg⁻]
+    spin = obj_dict[:spin]
+    eb = obj_dict[:eb]
+
+    # In each of these, the dataframe reverse the dimension order.
 
     # 1) on/off
+    ug_DA = PSI.axis_array_to_dataframe(DA_obj_dict[:ug], [:ug])[h:(h + 1), :]
+    for g in names(ug_DA), t_da in 1:2
+        if ug_DA[t_da, g] == 1
+            for t_ha in 1:12
+                if JuMP.solver_name(jump_model) == "Xpress"
+                    JuMP.@constraint(
+                        jump_model,
+                        ug[g, t_ha + (t_da - 1) * 12] >= 1
+                    )
+                else
+                    JuMP.fix(ug[g, t_ha + (t_da - 1) * 12], 1.0; force = true)
+                end
+            end
+        end
+    end
 
     # 2) reg up/down and spin for thermal and battery
+    reg⁺_DA = PSI.axis_array_to_dataframe(DA_obj_dict[:reg⁺], [:reg⁺])[h:(h + 1), :]
+    for g in names(reg⁺_DA), t_da in 1:2
+        for t_ha in 1:12
+            JuMP.@constraint(
+                jump_model,
+                reg⁺[g, t_ha + (t_da - 1) * 12] >= reg⁺_DA[t_da, g]
+            )
+        end
+    end
+    reg⁻_DA = PSI.axis_array_to_dataframe(DA_obj_dict[:reg⁻], [:reg⁻])[h:(h + 1), :]
+    for g in names(reg⁻_DA), t_da in 1:2
+        for t_ha in 1:12
+            JuMP.@constraint(
+                jump_model,
+                reg⁻[g, t_ha + (t_da - 1) * 12] >= reg⁻_DA[t_da, g]
+            )
+        end
+    end
+    spin_DA = PSI.axis_array_to_dataframe(DA_obj_dict[:spin], [:spin])[h:(h + 1), :]
+    for g in names(spin_DA), t_da in 1:2
+        for t_ha in 1:12
+            JuMP.@constraint(
+                jump_model,
+                spin[g, t_ha + (t_da - 1) * 12] >= spin_DA[t_da, g]
+            )
+        end
+    end
 
-    # 3) pb_in/pb_out
-
+    # 3) eb at end of hour
+    eb_DA = PSI.axis_array_to_dataframe(DA_obj_dict[:eb], [:eb])[h:(h + 1), :]
+    for b in names(eb_DA), t_da in 1:2
+        JuMP.@constraint(
+            jump_model,
+            eb[b, t_da * 12] == eb_DA[t_da, b]
+        )
+    end
 
 end
