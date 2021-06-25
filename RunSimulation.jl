@@ -1,4 +1,4 @@
-#using Revise
+using Revise
 include("src/Unit_commitment.jl")
 ## Local
 # using Xpress
@@ -170,7 +170,7 @@ set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
 # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
 set_device_model!(template_hauc, HydroDispatch, FixedOutput)
-set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve)) #; use_service_name = true))
+set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
 ### Using Dispatch here, not the same as above
@@ -182,12 +182,10 @@ HAUC = OperationsProblem(
     optimizer = solver,
     initial_time = DateTime(initial_time),
     optimizer_log_print = false,
-    #services_slack_variables = true,
+    services_slack_variables = true,
     balance_slack_variables = true,
     system_to_file = false,
 )
-
-#build!(HAUC; output_dir = mktempdir())
 
 #################################### Simulation Definition ################################
 
@@ -217,16 +215,21 @@ sequence = SimulationSequence(
             penalty_cost = 1e4, # objective function penalty
         ),
         # This fixes the Reserve Variables
-        #("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
-        #    variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
-        #    variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
-        #    affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
-        #),
-        #("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-        #    variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
-        #    variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
-        #    affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
-        #),
+        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
+            variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
+            variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
+            affected_variables = ["REG_DN__VariabeReserve_ReserveDown"],
+        ),
+        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+            variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
+            variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
+            affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+        ),
+        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+            variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
+            variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
+            affected_variables = ["SPIN__VariableReserve_ReserveUp"],
+        ),
     ),
     # How the stage initializes
     ini_cond_chronology = IntraProblemChronology(),
