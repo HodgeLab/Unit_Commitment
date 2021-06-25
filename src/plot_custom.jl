@@ -371,7 +371,6 @@ function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System; kwa
     fuel_agg = PG.combine_categories(fuel; names = cat_names)
 
     y_label = "Generation (GW)"
-    x_label = "Time of Day"
 
     seriescolor = PG.match_fuel_colors(fuel_agg, backend)
     p = plot_dataframe(
@@ -379,7 +378,6 @@ function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System; kwa
         gen.time[time_steps];
         seriescolor = seriescolor,
         y_label = y_label,
-        x_label = x_label,
         title = nothing,
         stack = true,
         set_display = false,
@@ -401,7 +399,6 @@ function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System; kwa
         gen.time[time_steps];
         seriescolor = ["black"],
         y_label = y_label,
-        x_label = x_label,
         title = nothing,
         stack = true,
         nofill = true,
