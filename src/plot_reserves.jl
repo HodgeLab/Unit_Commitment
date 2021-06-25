@@ -138,6 +138,8 @@ function _plot_reserve_internal(
     if use_slack
         DataFrames.rename!(reserves_agg, Dict("Unserved Energy" => "Unserved Reserves"))
     end
+    DataFrames.rename!(reserves_agg, Dict("Natural gas" => "NG-CT (solo)"))
+    DataFrames.rename!(reserves_agg, Dict("NG-CT" => "NG-CT (in CC train)"))
     p = plot_dataframe(
         reserves_agg,
         timestamps;
@@ -377,8 +379,20 @@ function plot_stage2_reserves(
 
     reserves = my_categorize_stage2_reserves(gen.data, categories, sym_dict)
 
-    # TODO HOW?
-    res_req = nothing
+    timestamps = get_realized_timestamps(res)
+    hour_timestamps = collect(first(timestamps):Hour(1):last(timestamps))
+    reserve_component = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
+    required_reserve = zeros(length(timestamps))
+    for i in 1:length(hour_timestamps)
+        required_reserve[((i - 1) * 12 + 1):(i * 12)] = get_time_series_values(
+            Deterministic,
+            reserve_component,
+            "requirement";
+            start_time = hour_timestamps[i],
+            len = 12
+        ) .* get_base_power(system)
+    end
+    res_req = DataFrames.DataFrame(Dict(:Requirement => required_reserve))
 
     p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs...)
 
@@ -426,7 +440,7 @@ function my_categorize_stage2_reserves(
     category_dataframes = Dict{String, DataFrames.DataFrame}()
     var_types = Dict([("ThermalMultiStart", sym_dict["reserve"])])
     var_types["GenericBattery"] = sym_dict["reserve"]
-    var_types["PV"] = sym_dict["reserve"]
+    var_types["RenewableDispatch"] = sym_dict["reserve"]
     for (category, list) in categories
         category_df = DataFrames.DataFrame()
         for atuple in list
