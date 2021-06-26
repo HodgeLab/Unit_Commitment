@@ -26,7 +26,7 @@ function apply_reg_requirements!(
     # These also need registration in the optimization Containers
 
     optimization_container.variables[:REG_UP__VariableReserve_ReserveUp] = reg⁺ = obj_dict[:reg⁺]
-    optimization_container.variables[:REG_UP__VariableReserve_ReserveDown] = reg⁻ = obj_dict[:reg⁻]
+    optimization_container.variables[:REG_DN__VariableReserve_ReserveDown] = reg⁻ = obj_dict[:reg⁻]
     if use_solar_reg
         reg⁺_S = obj_dict[:reg⁺_S]
         reg⁻_S = obj_dict[:reg⁻_S]
