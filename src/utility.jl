@@ -445,7 +445,7 @@ function write_reserve_summary(
     end
     if use_solar_reg
         output["Solar REG_UP [%]"] = output["Solar REG_UP [GW]"] / total_reg_up * 100
-        output["Solar REG_DN [%]"] = output["Solar REG_DN [GW]"] / total_reg_dn * 100f
+        output["Solar REG_DN [%]"] = output["Solar REG_DN [GW]"] / total_reg_dn * 100
     end
     if use_storage_reserves
         output["Storage SPIN [%]"] = output["Storage SPIN [GW]"] / total_spin * 100
