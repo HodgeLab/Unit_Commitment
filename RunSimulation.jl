@@ -2,10 +2,10 @@ include("src/Unit_commitment.jl")
 plotlyjs()
 ## Local
 # using Xpress
-# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.01) # MIPRELSTOP was  0.0001
 ## Eagle
 using Gurobi
-solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.05)
+solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.01)
 
 ############################## First Stage Problem Definition ##############################
 formulation = isempty(ARGS) ? "D" : ARGS[1]
