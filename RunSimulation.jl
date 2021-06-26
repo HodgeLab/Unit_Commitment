@@ -189,7 +189,11 @@ set_device_model!(template_hauc, HydroDispatch, FixedOutput)
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 if use_storage
-    set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+    if use_storage_reserves
+        set_device_model!(template_hauc, GenericBattery, BatteryAncillaryServices)
+    else
+        set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+    end
 end
 ### Using Dispatch here, not the same as above
 set_device_model!(template_hauc, ThermalMultiStart, ThermalDispatch)
