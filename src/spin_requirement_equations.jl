@@ -25,7 +25,7 @@ function apply_spin_requirements!(
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
 
     # Needs registration into the optimization container
-    optimization_container.variables["SPIN__VariableReserve_ReserveUp"] = spin = obj_dict[:spin]
+    optimization_container.variables[:SPIN__VariableReserve_ReserveUp] = spin = obj_dict[:spin]
     if use_solar_spin
         spin_S = obj_dict[:spin_S]
     end
