@@ -163,6 +163,8 @@ system_ha = System(
     time_series_read_only = true,
 )
 
+add_to_reserve_contributing_devices!(system_ha)
+
 add_inverter_based_reserves!(
     system_ha,
     use_solar_reg,
@@ -170,8 +172,6 @@ add_inverter_based_reserves!(
     use_storage_reserves,
     storage_reserve_names,
 )
-
-add_to_reserve_contributing_devices!(system_ha)
 
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
