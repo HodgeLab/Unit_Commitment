@@ -1,3 +1,10 @@
+function set_storage_reserve_SOC_to_max!(system, storage_reserve_names)
+    for stor in storage_reserve_names
+        g = get_component(GenericBattery, system, stor)
+        set_initial_energy!(g, get_state_of_charge_limits(g)[:max])
+    end
+end
+
 # Updates for stage 1
 function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
     for g in get_components(

@@ -21,6 +21,9 @@ C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse
 supp_type = isempty(ARGS) ? "generic" : ARGS[11]
 scenarios = 31
 
+# 2 large devices with 490 MW total rated capacity
+storage_reserve_names = ["PLANET_STORAGE", "PERMIAN_BASIN_STORAGE_6"]
+
 scenario_plot_dict = Dict{String, Vector{Int64}}(
     "2018-03-15T00:00:00" => [30, 29],
     "2018-03-27T00:00:00" => [31, 13],
@@ -104,6 +107,10 @@ end
 
 apply_manual_data_updates!(system_da, use_nuclear, initial_cond_file)
 
+if use_storage_reserves
+    set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
+end
+
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_dauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_dauc, PowerLoad, StaticPowerLoad)
@@ -114,9 +121,6 @@ set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveDown}, Ran
 set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
-
-# 2 large devices with 490 MW total rated capacity
-storage_reserve_names = ["PLANET_STORAGE", "PERMIAN_BASIN_STORAGE_6"]
 
 UC = OperationsProblem(
     custom_problem,
@@ -172,6 +176,10 @@ add_inverter_based_reserves!(
     use_storage_reserves,
     storage_reserve_names,
 )
+
+if use_storage_reserves
+    set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
+end
 
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
