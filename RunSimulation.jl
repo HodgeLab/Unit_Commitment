@@ -272,7 +272,7 @@ if status.value == 0
     write_to_CSV(UC, system_file_path, UC_output_path; time = solvetime)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:24)
+        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:24);
 
         for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
             plot_reserve(
@@ -281,7 +281,7 @@ if status.value == 0
                 save_dir = UC_output_path,
                 scenario = scenario,
                 time_steps = 1:24,
-            )
+            );
         end
     end
 
@@ -293,7 +293,7 @@ if status.value == 0
             HAUC.internal.optimization_container.settings,
         ),
         save_dir = HAUC_output_path,
-    )
+    );
 
     # Stage 2 plots of reserves
     # res = read_realized_variables(results_rh)
@@ -309,6 +309,6 @@ if status.value == 0
                 HAUC.internal.optimization_container.settings,
             ),
             save_dir = HAUC_output_path
-        )
+        );
     end
 end
