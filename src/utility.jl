@@ -565,3 +565,126 @@ function save_as_initial_condition(problem::PSI.OperationsProblem{T}, fname, hou
     ug = PSI.axis_array_to_dataframe(jump_model.obj_dict[:ug], [:ug])[[hour], :]
     CSV.write(fname, ug)
 end
+
+function write_reserve_summary(
+    problem::PSI.OperationsProblem{T},
+    output_path::String;
+) where {
+    T <: Union{
+        CVaRReserveUnitCommitmentCC,
+        BasecaseUnitCommitmentCC,
+        StochasticUnitCommitmentCC,
+    },
+}
+    optimization_container = PSI.get_optimization_container(problem)
+    use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
+    obj_dict = PSI.get_jump_model(optimization_container).obj_dict
+    case_initial_time = PSI.get_initial_time(problem)
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+    storage_reserve_names = problem.ext["storage_reserve_names"]
+    time_steps = 1:24
+
+    reg_reserve_up = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "REG_UP")
+    reg_reserve_dn =
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
+    spin_reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "SPIN")
+    total_required_reg⁺ = sum(get_time_series_values(
+        Deterministic,
+        reg_reserve_up,
+        "requirement";
+        start_time = case_initial_time,
+        len = length(time_steps)
+    ))
+    total_required_reg⁻ = sum(get_time_series_values(
+        Deterministic,
+        reg_reserve_dn,
+        "requirement";
+        start_time = case_initial_time,
+        len = length(time_steps)
+    ))
+    total_required_spin = sum(get_time_series_values(
+        Deterministic,
+        spin_reserve,
+        "requirement";
+        start_time = case_initial_time,
+        len = length(time_steps)
+    ))
+
+    output = Dict{String, Float64}()
+    output["Required REG_UP [GW]"] = total_required_reg⁺
+    output["Required REG_DN [GW]"] = total_required_reg⁻
+    output["Required SPIN [GW]"] = total_required_spin
+
+    reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:reg⁺], [:reg⁺])[time_steps, :]
+    reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:reg⁻], [:reg⁻])[time_steps, :]
+    spin = PSI.axis_array_to_dataframe(obj_dict[:spin], [:spin])[time_steps, :]
+
+    output["Thermal REG_UP [GW]"] = sum(sum.(eachrow(
+        (reg⁺[:, intersect(names(reg⁺), thermal_gen_names)]))))
+    output["Thermal REG_DN [GW]"] = sum(sum.(eachrow(
+        (reg⁻[:, intersect(names(reg⁻), thermal_gen_names)]))))
+    output["Thermal SPIN [GW]"] = sum(sum.(eachrow(
+        (spin[:, intersect(names(spin), thermal_gen_names)]))))
+
+    if use_slack
+        output["Unserved REG_UP [GW]"] = sum.eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])[time_steps, :])
+        output["Unserved REG_DN [GW]"] = sum.eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])[time_steps, :])
+        output["Unserved SPIN [GW]"] = sum.eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])[time_steps, :])
+    end
+    if use_solar_spin
+        output["Solar SPIN [GW]"] = sum.eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:spin_S], [:spin_S])[time_steps, :])
+    end
+    if use_solar_reg
+        output["Solar REG_UP [GW]"] = sum.eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:reg⁺_S], [:reg⁺_S])[time_steps, :])
+        output["Solar REG_DN [GW]"] = sum.eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:reg⁻_S], [:reg⁻_S])[time_steps, :])
+    end
+    if use_storage_reserves
+        output["Storage SPIN [GW]"] = sum(sum.(eachrow(
+        (spin[:, intersect(names(spin), storage_reserve_names)]))))
+    end
+
+    # Scale from 100 MW to GW
+    for v in keys(output)
+        output[v] *= get_base_power(system) / 1000
+    end
+
+    total_spin = output["Thermal SPIN [GW]"] + (use_slack ? output["Unserved SPIN [GW]"] : 0.0) +
+        (use_solar_spin ? output["Solar SPIN [GW]"] : 0.0) +
+        (use_storage_reserves ? output["Storage SPIN [GW]"] : 0.0)
+    total_reg_up = output["Thermal REG_UP [GW]"] + (use_slack ? output["Unserved REG_UP [GW]"] : 0.0) +
+        (use_solar_reg ? output["Solar REG_UP [GW]"] : 0.0)
+    total_reg_dn = output["Thermal REG_DN [GW]"] + (use_slack ? output["Unserved REG_DN [GW]"] : 0.0) +
+        (use_solar_reg ? output["Solar REG_DN [GW]"] : 0.0)
+
+    if use_slack
+        output["Unserved SPIN [%]"] = output["Unserved SPIN [GW]"] / total_spin * 100
+        output["Unserved REG_UP [%]"] = output["Unserved REG_UP [GW]"] / total_reg_up * 100
+        output["Unserved REG_DN [%]"] = output["Unserved REG_DN [GW]"] / total_reg_dn * 100
+    end
+
+    output["Thermal SPIN [%]"] = output["Thermal SPIN [GW]"] / total_spin * 100
+    output["Thermal REG_UP [%]"] = output["Thermal REG_UP [GW]"] / total_reg_up * 100
+    output["Thermal REG_DN [%]"] = output["Thermal REG_DN [GW]"] / total_reg_dn * 100
+
+    if use_solar_spin
+        output["Solar SPIN [%]"] = output["Solar SPIN [GW]"] / total_spin * 100
+    end
+    if use_solar_reg
+        output["Solar REG_UP [%]"] = output["Solar REG_UP [GW]"] / total_reg_up * 100
+        output["Solar REG_DN [%]"] = output["Solar REG_DN [GW]"] / total_reg_dn * 100f
+    end
+    if use_storage_reserves
+        output["Storage SPIN [%]"] = output["Storage SPIN [GW]"] / total_spin * 100
+    end
+
+    CSV.write(
+        joinpath(output_path, "reserve_summary.csv"),
+        output,
+    )
+end
