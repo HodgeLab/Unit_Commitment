@@ -298,7 +298,8 @@ if status.value == 0
     # Stage 2 outputs
     my_plot_fuel(
         results_rh,
-        system_ha;
+        system_ha,
+        use_storage;
         use_slack = PSI.get_balance_slack_variables(
             HAUC.internal.optimization_container.settings,
         ),
