@@ -280,7 +280,7 @@ if status.value == 0
     write_to_CSV(UC, system_file_path, UC_output_path; time = solvetime)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:24);
+        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:25);
 
         for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
             plot_reserve(
@@ -288,7 +288,7 @@ if status.value == 0
                 reserve_name;
                 save_dir = UC_output_path,
                 scenario = scenario,
-                time_steps = 1:24,
+                time_steps = 1:25,
             );
         end
     end
