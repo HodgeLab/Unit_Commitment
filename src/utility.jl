@@ -344,6 +344,11 @@ function write_reserve_summary(
         StochasticUnitCommitmentCC,
     },
 }
+    use_storage_reserves = problem.ext["use_storage_reserves"]
+    use_solar_reg = problem.ext["use_solar_reg"]
+    use_solar_spin = problem.ext["use_solar_spin"]
+
+    system = PSI.get_system(problem)
     optimization_container = PSI.get_optimization_container(problem)
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
     obj_dict = PSI.get_jump_model(optimization_container).obj_dict
@@ -379,41 +384,41 @@ function write_reserve_summary(
     ))
 
     output = Dict{String, Float64}()
-    output["Required REG_UP [GW]"] = total_required_reg⁺
-    output["Required REG_DN [GW]"] = total_required_reg⁻
-    output["Required SPIN [GW]"] = total_required_spin
+    output["Required REG_UP [GWh]"] = total_required_reg⁺
+    output["Required REG_DN [GWh]"] = total_required_reg⁻
+    output["Required SPIN [GWh]"] = total_required_spin
 
     reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:reg⁺], [:reg⁺])[time_steps, :]
     reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:reg⁻], [:reg⁻])[time_steps, :]
     spin = PSI.axis_array_to_dataframe(obj_dict[:spin], [:spin])[time_steps, :]
 
-    output["Thermal REG_UP [GW]"] = sum(sum.(eachrow(
+    output["Thermal REG_UP [GWh]"] = sum(sum.(eachrow(
         (reg⁺[:, intersect(names(reg⁺), thermal_gen_names)]))))
-    output["Thermal REG_DN [GW]"] = sum(sum.(eachrow(
+    output["Thermal REG_DN [GWh]"] = sum(sum.(eachrow(
         (reg⁻[:, intersect(names(reg⁻), thermal_gen_names)]))))
-    output["Thermal SPIN [GW]"] = sum(sum.(eachrow(
+    output["Thermal SPIN [GWh]"] = sum(sum.(eachrow(
         (spin[:, intersect(names(spin), thermal_gen_names)]))))
 
     if use_slack
-        output["Unserved REG_UP [GW]"] = sum.eachcol(
+        output["Unserved REG_UP [GWh]"] = sum.eachcol(
             PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])[time_steps, :])
-        output["Unserved REG_DN [GW]"] = sum.eachcol(
+        output["Unserved REG_DN [GWh]"] = sum.eachcol(
             PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])[time_steps, :])
-        output["Unserved SPIN [GW]"] = sum.eachcol(
+        output["Unserved SPIN [GWh]"] = sum.eachcol(
             PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])[time_steps, :])
     end
     if use_solar_spin
-        output["Solar SPIN [GW]"] = sum.eachcol(
+        output["Solar SPIN [GWh]"] = sum.eachcol(
             PSI.axis_array_to_dataframe(obj_dict[:spin_S], [:spin_S])[time_steps, :])
     end
     if use_solar_reg
-        output["Solar REG_UP [GW]"] = sum.eachcol(
+        output["Solar REG_UP [GWh]"] = sum.eachcol(
             PSI.axis_array_to_dataframe(obj_dict[:reg⁺_S], [:reg⁺_S])[time_steps, :])
-        output["Solar REG_DN [GW]"] = sum.eachcol(
+        output["Solar REG_DN [GWh]"] = sum.eachcol(
             PSI.axis_array_to_dataframe(obj_dict[:reg⁻_S], [:reg⁻_S])[time_steps, :])
     end
     if use_storage_reserves
-        output["Storage SPIN [GW]"] = sum(sum.(eachrow(
+        output["Storage SPIN [GWh]"] = sum(sum.(eachrow(
         (spin[:, intersect(names(spin), storage_reserve_names)]))))
     end
 
@@ -422,37 +427,187 @@ function write_reserve_summary(
         output[v] *= get_base_power(system) / 1000
     end
 
-    total_spin = output["Thermal SPIN [GW]"] + (use_slack ? output["Unserved SPIN [GW]"] : 0.0) +
-        (use_solar_spin ? output["Solar SPIN [GW]"] : 0.0) +
-        (use_storage_reserves ? output["Storage SPIN [GW]"] : 0.0)
-    total_reg_up = output["Thermal REG_UP [GW]"] + (use_slack ? output["Unserved REG_UP [GW]"] : 0.0) +
-        (use_solar_reg ? output["Solar REG_UP [GW]"] : 0.0)
-    total_reg_dn = output["Thermal REG_DN [GW]"] + (use_slack ? output["Unserved REG_DN [GW]"] : 0.0) +
-        (use_solar_reg ? output["Solar REG_DN [GW]"] : 0.0)
-
-    if use_slack
-        output["Unserved SPIN [%]"] = output["Unserved SPIN [GW]"] / total_spin * 100
-        output["Unserved REG_UP [%]"] = output["Unserved REG_UP [GW]"] / total_reg_up * 100
-        output["Unserved REG_DN [%]"] = output["Unserved REG_DN [GW]"] / total_reg_dn * 100
-    end
-
-    output["Thermal SPIN [%]"] = output["Thermal SPIN [GW]"] / total_spin * 100
-    output["Thermal REG_UP [%]"] = output["Thermal REG_UP [GW]"] / total_reg_up * 100
-    output["Thermal REG_DN [%]"] = output["Thermal REG_DN [GW]"] / total_reg_dn * 100
-
-    if use_solar_spin
-        output["Solar SPIN [%]"] = output["Solar SPIN [GW]"] / total_spin * 100
-    end
-    if use_solar_reg
-        output["Solar REG_UP [%]"] = output["Solar REG_UP [GW]"] / total_reg_up * 100
-        output["Solar REG_DN [%]"] = output["Solar REG_DN [GW]"] / total_reg_dn * 100
-    end
-    if use_storage_reserves
-        output["Storage SPIN [%]"] = output["Storage SPIN [GW]"] / total_spin * 100
-    end
+    output = _calc_reserve_percentages!(output,
+        use_slack,
+        use_solar_spin,
+        use_solar_reg,
+        use_storage_reserves
+        )
 
     CSV.write(
         joinpath(output_path, "reserve_summary.csv"),
         output,
     )
+end
+
+function write_reserve_summary(
+    res::PSI.SimulationProblemResults,
+    system::PSY.System,
+    output_path::String,
+    use_slack::Bool,
+    use_solar_reg::Bool,
+    use_solar_spin::Bool,
+    use_storage_reserves::Bool;
+)
+    Δt = 1 / 12
+
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+    storage_names = PSY.get_name.(get_components(PSY.GenericBattery, system))
+    solar_names = PSY.get_name.(get_components(RenewableGen, system, x -> get_prime_mover(x) == PrimeMovers.PVe))
+
+    output = Dict{String, Float64}()
+
+    output["Required REG_UP [GWh]"] = _get_total_hauc_reserve_requirement(
+        res,
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "REG_UP")
+        )
+    output["Required REG_DN [GWh]"] = _get_total_hauc_reserve_requirement(
+        res,
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
+        )
+    output["Required SPIN [GWh]"] = _get_total_hauc_reserve_requirement(
+        res,
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "SPIN")
+        )
+
+    output["Thermal REG_UP [GWh]"] = _2D_total(
+        res,
+        :REG_UP__VariableReserve_ReserveUp;
+        filter = thermal_gen_names
+    )
+    output["Thermal REG_DN [GWh]"] = _2D_total(
+        res,
+        :REG_DN__VariableReserve_ReserveDown;
+        filter = thermal_gen_names
+    )
+    output["Thermal SPIN [GWh]"] = _2D_total(
+        res,
+        :SPIN__VariableReserve_ReserveUp;
+        filter = thermal_gen_names
+    )
+
+    if use_slack
+        output["Unserved REG_UP [GWh]"] = _1D_total(res, :γ⁺__REG_UP)
+        output["Unserved REG_DN [GWh]"] = _1D_total(res, :γ⁺__REG_DN)
+        output["Unserved SPIN [GWh]"] = _1D_total(res, :γ⁺__SPIN)
+    end
+    if use_solar_spin
+        output["Solar SPIN [GWh]"] = _2D_total(
+            res,
+            :SPIN__VariableReserve_ReserveUp;
+            filter = solar_names
+        )
+    end
+    if use_solar_reg
+        output["Solar REG_UP [GWh]"] = _2D_total(
+            res,
+            :REG_UP__VariableReserve_ReserveUp;
+            filter = solar_names
+        )
+        output["Solar REG_DN [GWh]"] = _2D_total(
+            res,
+            :REG_DN__VariableReserve_ReserveDown;
+            filter = solar_names
+        )
+    end
+    if use_storage_reserves
+        output["Storage SPIN [GWh]"] = _2D_total(
+            res,
+            :SPIN__VariableReserve_ReserveUp;
+            filter = storage_names
+        )
+    end
+
+    for v in keys(output)
+        output[v] *= Δt * get_base_power(system) / 1000
+    end
+
+    output = _calc_reserve_percentages!(output,
+        use_slack,
+        use_solar_spin,
+        use_solar_reg,
+        use_storage_reserves
+        )
+
+    CSV.write(
+        joinpath(output_path, "reserve_summary.csv"),
+        output,
+    )
+end
+
+function _2D_total(res::PSI.SimulationProblemResults, sym::Symbol; filter = nothing)
+    temp = read_realized_variables(res, names = [sym])[sym]
+    if isnothing(filter)
+        temp = temp[:, setdiff(names(temp), ["DateTime"])]
+    else
+        temp = temp[:, intersect(names(temp), filter)]
+    end
+    return sum(sum.(eachrow(temp)))
+end
+
+function _1D_total(res::PSI.SimulationProblemResults, sym::Symbol)
+    temp = read_realized_variables(res, names = [sym])[sym]
+    return sum(sum.(eachcol(temp[:, setdiff(names(temp), ["DateTime"])])))
+end
+
+function _get_total_hauc_reserve_requirement(
+    res::PSI.SimulationProblemResults,
+    reserve_component
+    )
+
+    timestamps = get_realized_timestamps(res)
+    hour_timestamps = collect(first(timestamps):Hour(1):last(timestamps))
+
+    required_reserve = zeros(length(timestamps))
+    for i in 1:length(hour_timestamps)
+        required_reserve[((i - 1) * 12 + 1):(i * 12)] =
+            get_time_series_values(
+                Deterministic,
+                reserve_component,
+                "requirement";
+                start_time = hour_timestamps[i],
+                len = 12,
+            )
+    end
+
+    return sum(required_reserve)
+end
+
+function _calc_reserve_percentages!(output::Dict,
+    use_slack::Bool,
+    use_solar_spin::Bool,
+    use_solar_reg::Bool,
+    use_storage_reserves::Bool
+    )
+
+    total_spin = output["Thermal SPIN [GWh]"] + (use_slack ? output["Unserved SPIN [GWh]"] : 0.0) +
+        (use_solar_spin ? output["Solar SPIN [GWh]"] : 0.0) +
+        (use_storage_reserves ? output["Storage SPIN [GWh]"] : 0.0)
+    total_reg_up = output["Thermal REG_UP [GWh]"] + (use_slack ? output["Unserved REG_UP [GWh]"] : 0.0) +
+        (use_solar_reg ? output["Solar REG_UP [GWh]"] : 0.0)
+    total_reg_dn = output["Thermal REG_DN [GWh]"] + (use_slack ? output["Unserved REG_DN [GWh]"] : 0.0) +
+        (use_solar_reg ? output["Solar REG_DN [GWh]"] : 0.0)
+
+    if use_slack
+        output["Unserved SPIN [%]"] = output["Unserved SPIN [GWh]"] / total_spin * 100
+        output["Unserved REG_UP [%]"] = output["Unserved REG_UP [GWh]"] / total_reg_up * 100
+        output["Unserved REG_DN [%]"] = output["Unserved REG_DN [GWh]"] / total_reg_dn * 100
+    end
+
+    output["Thermal SPIN [%]"] = output["Thermal SPIN [GWh]"] / total_spin * 100
+    output["Thermal REG_UP [%]"] = output["Thermal REG_UP [GWh]"] / total_reg_up * 100
+    output["Thermal REG_DN [%]"] = output["Thermal REG_DN [GWh]"] / total_reg_dn * 100
+
+    if use_solar_spin
+        output["Solar SPIN [%]"] = output["Solar SPIN [GWh]"] / total_spin * 100
+    end
+    if use_solar_reg
+        output["Solar REG_UP [%]"] = output["Solar REG_UP [GWh]"] / total_reg_up * 100
+        output["Solar REG_DN [%]"] = output["Solar REG_DN [GWh]"] / total_reg_dn * 100
+    end
+    if use_storage_reserves
+        output["Storage SPIN [%]"] = output["Storage SPIN [GWh]"] / total_spin * 100
+    end
+
+    return output
 end

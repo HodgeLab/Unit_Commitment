@@ -278,6 +278,7 @@ if status.value == 0
     # Stage 1 outputs
     UC = sim.problems["DAUC"]
     write_to_CSV(UC, system_file_path, UC_output_path; time = solvetime)
+    write_reserve_summary(UC, UC_output_path)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
         plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:25);
@@ -296,6 +297,18 @@ if status.value == 0
     plot_charging(UC; save_dir = UC_output_path, time_steps = 1:25);
 
     # Stage 2 outputs
+    write_reserve_summary(
+        results_rh,
+        system_ha,
+        HAUC_output_path,
+        PSI.get_balance_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        use_solar_reg,
+        use_solar_spin,
+        use_storage_reserves;
+    )
+
     my_plot_fuel(
         results_rh,
         system_ha,
