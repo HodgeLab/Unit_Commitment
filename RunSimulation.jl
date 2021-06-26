@@ -115,7 +115,8 @@ set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
 
-storage_reserve_names = ["EXPOSE_STORAGE"]
+# 2 large devices with 490 MW total rated capacity
+storage_reserve_names = ["PLANET_STORAGE", "PERMIAN_BASIN_STORAGE_6"]
 
 UC = OperationsProblem(
     custom_problem,
