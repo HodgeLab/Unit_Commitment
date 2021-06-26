@@ -220,21 +220,21 @@ sequence = SimulationSequence(
             penalty_cost = 1e4, # objective function penalty
         ),
         # This fixes the Reserve Variables
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
-            variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
-            variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
-            affected_variables = ["REG_DN__VariableReserve_ReserveDown"],
-        ),
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-            variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
-            variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
-            affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
-        ),
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-            variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
-            variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
-            affected_variables = ["SPIN__VariableReserve_ReserveUp"],
-        ),
+        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
+        #     variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
+        #     variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
+        #     affected_variables = ["REG_DN__VariableReserve_ReserveDown"],
+        # ),
+        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+        #     variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
+        #     variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
+        #     affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+        # ),
+        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+        #     variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
+        #     variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
+        #     affected_variables = ["SPIN__VariableReserve_ReserveUp"],
+        # ),
     ),
     # How the stage initializes
     ini_cond_chronology = IntraProblemChronology(),
