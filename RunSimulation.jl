@@ -180,7 +180,9 @@ set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
 set_device_model!(template_hauc, HydroDispatch, FixedOutput)
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
-set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+if use_storage
+    set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+end
 ### Using Dispatch here, not the same as above
 set_device_model!(template_hauc, ThermalMultiStart, ThermalDispatch)
 
@@ -199,6 +201,38 @@ HAUC = OperationsProblem(
 
 problems = SimulationProblems(DAUC = UC, HAUC = HAUC)
 
+feedforward_dict = Dict{Tuple{String, Symbol, Symbol}, PowerSimulations.AbstractAffectFeedForward}(
+    # This sends the UC decisions down to the ED problem
+    ("HAUC", :devices, :ThermalMultiStart) => SemiContinuousFF(
+        binary_source_problem = PSI.ON,
+        affected_variables = [PSI.ACTIVE_POWER],
+    ),
+    # This fixes the Reserve Variables
+    # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
+    #     variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
+    #     variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
+    #     affected_variables = ["REG_DN__VariableReserve_ReserveDown"],
+    # ),
+    # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+    #     variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
+    #     variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
+    #     affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+    # ),
+    # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+    #     variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
+    #     variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
+    #     affected_variables = ["SPIN__VariableReserve_ReserveUp"],
+    # ),
+)
+if use_storage
+    feedforward_dict[("HAUC", :devices, :GenericBattery)] = EnergyTargetFF(
+        variable_source_problem = PSI.ENERGY,
+        affected_variables = [PSI.ENERGY],
+        target_period = 12,  # must match energy level at the end of the hour
+        penalty_cost = 1e4, # objective function penalty
+    )
+end
+
 sequence = SimulationSequence(
     problems = problems,
     # Synchronize means that the decisions from one hour are synchronized with the
@@ -210,35 +244,7 @@ sequence = SimulationSequence(
         "HAUC" => (Hour(1), Consecutive()),
     ),
     # How one stage "sends" variables to the next stage
-    feedforward = Dict(
-        # This sends the UC decisions down to the ED problem
-        ("HAUC", :devices, :ThermalMultiStart) => SemiContinuousFF(
-            binary_source_problem = PSI.ON,
-            affected_variables = [PSI.ACTIVE_POWER],
-        ),
-        ("HAUC", :devices, :GenericBattery) => EnergyTargetFF(
-            variable_source_problem = PSI.ENERGY,
-            affected_variables = [PSI.ENERGY],
-            target_period = 12,  # must match energy level at the end of the hour
-            penalty_cost = 1e4, # objective function penalty
-        ),
-        # This fixes the Reserve Variables
-        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
-        #     variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
-        #     variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
-        #     affected_variables = ["REG_DN__VariableReserve_ReserveDown"],
-        # ),
-        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-        #     variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
-        #     variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
-        #     affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
-        # ),
-        # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-        #     variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
-        #     variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
-        #     affected_variables = ["SPIN__VariableReserve_ReserveUp"],
-        # ),
-    ),
+    feedforward = feedforward_dict,
     # How the stage initializes
     ini_cond_chronology = IntraProblemChronology(),
 )
