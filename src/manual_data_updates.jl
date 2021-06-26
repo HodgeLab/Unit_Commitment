@@ -74,6 +74,10 @@ function add_to_reserve_contributing_devices!(
         PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
     spin_reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "SPIN")
 
+    # Relax regulation response time to 1 hour; try to make non-binding
+    set_time_frame!(reg_reserve_up, 60.0)
+    set_time_frame!(reg_reserve_dn, 60.0)
+
     default_reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
     default_reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
     default_spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
