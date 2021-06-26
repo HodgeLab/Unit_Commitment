@@ -293,6 +293,8 @@ if status.value == 0
         end
     end
 
+    plot_charging(UC; save_dir = UC_output_path, time_steps = 1:25);
+
     # Stage 2 outputs
     my_plot_fuel(
         results_rh,
@@ -319,4 +321,6 @@ if status.value == 0
             save_dir = HAUC_output_path
         );
     end
+
+    plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
 end
