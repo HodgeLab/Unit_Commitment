@@ -8,7 +8,7 @@ using Xpress
 solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.01) # MIPRELSTOP was  0.0001
 ## Eagle
 # using Gurobi
-# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.01)
 
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[1])
 use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[2])

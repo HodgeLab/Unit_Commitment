@@ -354,16 +354,22 @@ function plot_stage2_reserves(
 
     sym_dict = Dict{String, Symbol}()
     if reserve_name == "REG_UP"
+        reserve_component =
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :REG_UP__VariableReserve_ReserveUp
         if use_slack
             sym_dict["slack"] = :γ⁺__REG_UP
         end
     elseif reserve_name == "REG_DN"
+        reserve_component =
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, reserve_name)
         sym_dict["reserve"] = :REG_DN__VariableReserve_ReserveDown
         if use_slack
             sym_dict["slack"] = :γ⁺__REG_DN
         end
     elseif reserve_name == "SPIN"
+        reserve_component =
+            PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
         sym_dict["reserve"] = :SPIN__VariableReserve_ReserveUp
         if use_slack
             sym_dict["slack"] = :γ⁺__SPIN
@@ -379,8 +385,7 @@ function plot_stage2_reserves(
 
     timestamps = get_realized_timestamps(res)
     hour_timestamps = collect(first(timestamps):Hour(1):last(timestamps))
-    reserve_component =
-        PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
+
     required_reserve = zeros(length(timestamps))
     for i in 1:length(hour_timestamps)
         required_reserve[((i - 1) * 12 + 1):(i * 12)] =

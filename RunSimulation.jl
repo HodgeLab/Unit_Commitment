@@ -1,11 +1,11 @@
-using Revise
 include("src/Unit_commitment.jl")
+plotlyjs()
 ## Local
 # using Xpress
-# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+# solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.01) # MIPRELSTOP was  0.0001
 ## Eagle
 using Gurobi
-solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.05)
+solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.01)
 
 ############################## First Stage Problem Definition ##############################
 formulation = isempty(ARGS) ? "D" : ARGS[1]
@@ -20,6 +20,9 @@ C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[11]
 scenarios = 31
+
+# 2 large devices with 490 MW total rated capacity
+storage_reserve_names = ["PLANET_STORAGE", "PERMIAN_BASIN_STORAGE_6"]
 
 scenario_plot_dict = Dict{String, Vector{Int64}}(
     "2018-03-15T00:00:00" => [30, 29],
@@ -76,15 +79,20 @@ output_path =
     split(initial_time, "T")[1] *
     optional_title *
     "/"
-if !isdir(output_path)
-    mkpath(output_path)
+UC_output_path = output_path * "UC/"
+HAUC_output_path = output_path * "HAUC/"
+if !isdir(UC_output_path)
+    mkpath(UC_output_path)
+end
+if !isdir(HAUC_output_path)
+    mkpath(HAUC_output_path)
 end
 
 ## Jose
-system_file_path = "/Users/jdlara/Dropbox/texas_data"
-simulation_folder = pwd()
+# system_file_path = "/Users/jdlara/Dropbox/texas_data"
+# simulation_folder = pwd()
 ## Kate
-# system_file_path = "data/"
+system_file_path = "data/"
 simulation_folder = output_path
 
 system_da = System(
@@ -99,6 +107,10 @@ end
 
 apply_manual_data_updates!(system_da, use_nuclear, initial_cond_file)
 
+if use_storage_reserves
+    set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
+end
+
 template_dauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_dauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_dauc, PowerLoad, StaticPowerLoad)
@@ -109,8 +121,6 @@ set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveDown}, Ran
 set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
-
-storage_reserve_names = ["EXPOSE_STORAGE"]
 
 UC = OperationsProblem(
     custom_problem,
@@ -157,6 +167,8 @@ system_ha = System(
     time_series_read_only = true,
 )
 
+add_to_reserve_contributing_devices!(system_ha)
+
 add_inverter_based_reserves!(
     system_ha,
     use_solar_reg,
@@ -165,6 +177,10 @@ add_inverter_based_reserves!(
     storage_reserve_names,
 )
 
+if use_storage_reserves
+    set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
+end
+
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
@@ -172,7 +188,9 @@ set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
 set_device_model!(template_hauc, HydroDispatch, FixedOutput)
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
-set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+if use_storage
+    set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+end
 ### Using Dispatch here, not the same as above
 set_device_model!(template_hauc, ThermalMultiStart, ThermalDispatch)
 
@@ -191,6 +209,38 @@ HAUC = OperationsProblem(
 
 problems = SimulationProblems(DAUC = UC, HAUC = HAUC)
 
+feedforward_dict = Dict{Tuple{String, Symbol, Symbol}, PowerSimulations.AbstractAffectFeedForward}(
+    # This sends the UC decisions down to the ED problem
+    ("HAUC", :devices, :ThermalMultiStart) => SemiContinuousFF(
+        binary_source_problem = PSI.ON,
+        affected_variables = [PSI.ACTIVE_POWER],
+    ),
+    # This fixes the Reserve Variables
+    # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
+    #     variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
+    #     variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
+    #     affected_variables = ["REG_DN__VariableReserve_ReserveDown"],
+    # ),
+    # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+    #     variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
+    #     variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
+    #     affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
+    # ),
+    # ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
+    #     variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
+    #     variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
+    #     affected_variables = ["SPIN__VariableReserve_ReserveUp"],
+    # ),
+)
+if use_storage
+    feedforward_dict[("HAUC", :devices, :GenericBattery)] = EnergyTargetFF(
+        variable_source_problem = PSI.ENERGY,
+        affected_variables = [PSI.ENERGY],
+        target_period = 12,  # must match energy level at the end of the hour
+        penalty_cost = 1e4, # objective function penalty
+    )
+end
+
 sequence = SimulationSequence(
     problems = problems,
     # Synchronize means that the decisions from one hour are synchronized with the
@@ -202,35 +252,7 @@ sequence = SimulationSequence(
         "HAUC" => (Hour(1), Consecutive()),
     ),
     # How one stage "sends" variables to the next stage
-    feedforward = Dict(
-        # This sends the UC decisions down to the ED problem
-        ("HAUC", :devices, :ThermalMultiStart) => SemiContinuousFF(
-            binary_source_problem = PSI.ON,
-            affected_variables = [PSI.ACTIVE_POWER],
-        ),
-        ("HAUC", :devices, :GenericBattery) => EnergyTargetFF(
-            variable_source_problem = PSI.ENERGY,
-            affected_variables = [PSI.ENERGY],
-            target_period = 12,  # must match energy level at the end of the hour
-            penalty_cost = 1e4, # objective function penalty
-        ),
-        # This fixes the Reserve Variables
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveDown}"))) => RangeFF(
-            variable_source_problem_ub = "REG_DN__VariableReserve_ReserveDown",
-            variable_source_problem_lb = "REG_DN__VariableReserve_ReserveDown",
-            affected_variables = ["REG_DN__VariableReserve_ReserveDown"],
-        ),
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-            variable_source_problem_ub = "REG_UP__VariableReserve_ReserveUp",
-            variable_source_problem_lb = "REG_UP__VariableReserve_ReserveUp",
-            affected_variables = ["REG_UP__VariableReserve_ReserveUp"],
-        ),
-        ("HAUC", :services, ("", Symbol("VariableReserve{ReserveUp}"))) => RangeFF(
-            variable_source_problem_ub = "SPIN__VariableReserve_ReserveUp",
-            variable_source_problem_lb = "SPIN__VariableReserve_ReserveUp",
-            affected_variables = ["SPIN__VariableReserve_ReserveUp"],
-        ),
-    ),
+    feedforward = feedforward_dict,
     # How the stage initializes
     ini_cond_chronology = IntraProblemChronology(),
 )
@@ -252,38 +274,23 @@ results_rh = get_problem_results(results, "HAUC")
 
 # This is for the personalized plotting
 if status.value == 0
-    plotlyjs()
 
     # Stage 1 outputs
     UC = sim.problems["DAUC"]
-    write_to_CSV(UC, system_file_path, output_path; time = solvetime)
+    write_to_CSV(UC, system_file_path, UC_output_path; time = solvetime)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = output_path, time_steps = 1:24)
+        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:24);
 
-        plot_reserve(
-            UC,
-            "SPIN";
-            save_dir = output_path,
-            scenario = scenario,
-            time_steps = 1:24,
-        )
-
-        plot_reserve(
-            UC,
-            "REG_UP";
-            save_dir = output_path,
-            scenario = scenario,
-            time_steps = 1:24,
-        )
-
-        plot_reserve(
-            UC,
-            "REG_DN";
-            save_dir = output_path,
-            scenario = scenario,
-            time_steps = 1:24,
-        )
+        for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
+            plot_reserve(
+                UC,
+                reserve_name;
+                save_dir = UC_output_path,
+                scenario = scenario,
+                time_steps = 1:24,
+            );
+        end
     end
 
     # Stage 2 outputs
@@ -293,12 +300,23 @@ if status.value == 0
         use_slack = PSI.get_balance_slack_variables(
             HAUC.internal.optimization_container.settings,
         ),
-        save_dir = output_path,
-    )
+        save_dir = HAUC_output_path,
+    );
 
     # Stage 2 plots of reserves
+    # res = read_realized_variables(results_rh)
+    # reserves_up = res[:REG_UP__VariableReserve_ReserveUp]
+    # plot_dataframe(reserves_up, get_realized_timestamps(results_rh))
 
-    res = read_realized_variables(results_rh)
-    reserves_up = res[:REG_UP__VariableReserve_ReserveUp]
-    plot_dataframe(reserves_up, get_realized_timestamps(results_rh))
+    for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
+        plot_stage2_reserves(
+            results_rh,
+            system_ha,
+            reserve_name;
+            use_slack = PSI.get_services_slack_variables(
+                HAUC.internal.optimization_container.settings,
+            ),
+            save_dir = HAUC_output_path
+        );
+    end
 end

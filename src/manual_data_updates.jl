@@ -1,3 +1,10 @@
+function set_storage_reserve_SOC_to_max!(system, storage_reserve_names)
+    for stor in storage_reserve_names
+        g = get_component(GenericBattery, system, stor)
+        set_initial_energy!(g, get_state_of_charge_limits(g)[:max])
+    end
+end
+
 # Updates for stage 1
 function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
     for g in get_components(
@@ -63,5 +70,50 @@ function add_inverter_based_reserves!(
         for stor in storage_reserve_names
             add_service!(get_component(GenericBattery, system, stor), spin_reserve, system)
         end
+    end
+end
+
+function add_to_reserve_contributing_devices!(
+    system
+)
+    reg_reserve_up = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "REG_UP")
+    reg_reserve_dn =
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveDown}, system, "REG_DN")
+    spin_reserve = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, "SPIN")
+
+    # Relax regulation response time to 1 hour; try to make non-binding
+    set_time_frame!(reg_reserve_up, 60.0)
+    set_time_frame!(reg_reserve_dn, 60.0)
+
+    default_reg⁺_device_names = get_name.(get_contributing_devices(system, reg_reserve_up))
+    default_reg⁻_device_names = get_name.(get_contributing_devices(system, reg_reserve_dn))
+    default_spin_device_names = get_name.(get_contributing_devices(system, spin_reserve))
+    desired_reg⁺_device_names =
+        get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    desired_reg⁻_device_names =
+        get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+    desired_spin_device_names =
+        get_name.(get_components(ThermalMultiStart, system, x -> !PSY.get_must_run(x)))
+
+    for g in get_components(
+        ThermalMultiStart,
+        system,
+        x -> get_name(x) in desired_reg⁺_device_names && !(get_name(x) in default_reg⁺_device_names),
+    )
+        add_service!(g, reg_reserve_up, system)
+    end
+    for g in get_components(
+        ThermalMultiStart,
+        system,
+        x -> get_name(x) in desired_reg⁻_device_names && !(get_name(x) in default_reg⁻_device_names),
+    )
+        add_service!(g, reg_reserve_dn, system)
+    end
+    for g in get_components(
+        ThermalMultiStart,
+        system,
+        x -> get_name(x) in desired_spin_device_names && !(get_name(x) in default_spin_device_names),
+    )
+        add_service!(g, spin_reserve, system)
     end
 end

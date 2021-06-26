@@ -6,10 +6,10 @@ plotlyjs()
 
 ## Local
 using Xpress
-solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
+solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.01) # MIPRELSTOP was  0.0001
 ## Eagle
 # using Gurobi
-# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.1)
+# solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.01)
 
 formulation = isempty(ARGS) ? "D" : ARGS[1]
 initial_time = isempty(ARGS) ? "2018-03-15T00:00:00" : ARGS[2]
