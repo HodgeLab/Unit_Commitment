@@ -1,5 +1,5 @@
+using Revise
 include("src/Unit_commitment.jl")
-plotlyjs()
 ## Local
 # using Xpress
 # solver = optimizer_with_attributes(Xpress.Optimizer, "MIPRELSTOP" => 0.1) # MIPRELSTOP was  0.0001
@@ -76,20 +76,15 @@ output_path =
     split(initial_time, "T")[1] *
     optional_title *
     "/"
-UC_output_path = output_path * "UC/"
-HAUC_output_path = output_path * "HAUC/"
-if !isdir(UC_output_path)
-    mkpath(UC_output_path)
-end
-if !isdir(HAUC_output_path)
-    mkpath(HAUC_output_path)
+if !isdir(output_path)
+    mkpath(output_path)
 end
 
 ## Jose
-# system_file_path = "/Users/jdlara/Dropbox/texas_data"
-# simulation_folder = pwd()
+system_file_path = "/Users/jdlara/Dropbox/texas_data"
+simulation_folder = pwd()
 ## Kate
-system_file_path = "data/"
+# system_file_path = "data/"
 simulation_folder = output_path
 
 system_da = System(
@@ -213,7 +208,7 @@ sequence = SimulationSequence(
             binary_source_problem = PSI.ON,
             affected_variables = [PSI.ACTIVE_POWER],
         ),
-         ("HAUC", :devices, :GenericBattery) => EnergyTargetFF(
+        ("HAUC", :devices, :GenericBattery) => EnergyTargetFF(
             variable_source_problem = PSI.ENERGY,
             affected_variables = [PSI.ENERGY],
             target_period = 12,  # must match energy level at the end of the hour
@@ -257,23 +252,38 @@ results_rh = get_problem_results(results, "HAUC")
 
 # This is for the personalized plotting
 if status.value == 0
+    plotlyjs()
 
     # Stage 1 outputs
     UC = sim.problems["DAUC"]
-    write_to_CSV(UC, system_file_path, UC_output_path; time = solvetime)
+    write_to_CSV(UC, system_file_path, output_path; time = solvetime)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:24)
+        plot_fuel(UC; scenario = scenario, save_dir = output_path, time_steps = 1:24)
 
-        for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
-            plot_reserve(
-                UC,
-                reserve_name;
-                save_dir = UC_output_path,
-                scenario = scenario,
-                time_steps = 1:24,
-            )
-        end
+        plot_reserve(
+            UC,
+            "SPIN";
+            save_dir = output_path,
+            scenario = scenario,
+            time_steps = 1:24,
+        )
+
+        plot_reserve(
+            UC,
+            "REG_UP";
+            save_dir = output_path,
+            scenario = scenario,
+            time_steps = 1:24,
+        )
+
+        plot_reserve(
+            UC,
+            "REG_DN";
+            save_dir = output_path,
+            scenario = scenario,
+            time_steps = 1:24,
+        )
     end
 
     # Stage 2 outputs
@@ -283,23 +293,12 @@ if status.value == 0
         use_slack = PSI.get_balance_slack_variables(
             HAUC.internal.optimization_container.settings,
         ),
-        save_dir = HAUC_output_path,
+        save_dir = output_path,
     )
 
     # Stage 2 plots of reserves
-    # res = read_realized_variables(results_rh)
-    # reserves_up = res[:REG_UP__VariableReserve_ReserveUp]
-    # plot_dataframe(reserves_up, get_realized_timestamps(results_rh))
 
-    for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
-        plot_stage2_reserves(
-            results_rh,
-            system_ha,
-            reserve_name;
-            use_slack = PSI.get_services_slack_variables(
-                HAUC.internal.optimization_container.settings,
-            ),
-            save_dir = HAUC_output_path
-        )
-    end
+    res = read_realized_variables(results_rh)
+    reserves_up = res[:REG_UP__VariableReserve_ReserveUp]
+    plot_dataframe(reserves_up, get_realized_timestamps(results_rh))
 end

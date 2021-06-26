@@ -88,7 +88,8 @@ function plot_reserve(
 
     reserves = my_categorize_reserves(gen.data, cat, sym_dict, storage)
 
-    res_req = DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
+    res_req =
+        DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
         get_base_power(system)
 
     p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs...)
@@ -114,19 +115,14 @@ function _plot_reserve_internal(
     timestamps,
     sym_dict,
     use_slack;
-    kwargs...
-    )
-
+    kwargs...,
+)
     p = PG._empty_plot()
     backend = Plots.backend()
 
     # Hack to make nuclear on the bottom and curtailment on top
     cat_names = intersect(PG.CATEGORY_DEFAULT, keys(reserves))
-    cat_names = [
-        cat_names[2],
-        cat_names[1],
-        cat_names[3:end]...
-    ]
+    cat_names = [cat_names[2], cat_names[1], cat_names[3:end]...]
     reserves_agg = PG.combine_categories(reserves; names = cat_names)
 
     y_label = "Reserves (MW)"
@@ -153,7 +149,8 @@ function _plot_reserve_internal(
     )
 
     if !isnothing(res_req)
-        kwargs = Dict{Symbol, Any}((k, v) for (k, v) in kwargs if k ∉ [:nofill, :seriescolor])
+        kwargs =
+            Dict{Symbol, Any}((k, v) for (k, v) in kwargs if k ∉ [:nofill, :seriescolor])
         kwargs[:linestyle] = get(kwargs, :linestyle, :dash)
         kwargs[:linewidth] = get(kwargs, :linewidth, 3)
 
@@ -349,7 +346,8 @@ function plot_stage2_reserves(
     res::PSI.SimulationProblemResults,
     system::PSY.System,
     reserve_name::String;
-    kwargs...)
+    kwargs...,
+)
     title = get(kwargs, :title, reserve_name)
     save_dir = get(kwargs, :save_dir, nothing)
     use_slack = get(kwargs, :use_slack, true)
@@ -381,16 +379,18 @@ function plot_stage2_reserves(
 
     timestamps = get_realized_timestamps(res)
     hour_timestamps = collect(first(timestamps):Hour(1):last(timestamps))
-    reserve_component = PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
+    reserve_component =
+        PSY.get_component(PSY.VariableReserve{PSY.ReserveUp}, system, reserve_name)
     required_reserve = zeros(length(timestamps))
     for i in 1:length(hour_timestamps)
-        required_reserve[((i - 1) * 12 + 1):(i * 12)] = get_time_series_values(
-            Deterministic,
-            reserve_component,
-            "requirement";
-            start_time = hour_timestamps[i],
-            len = 12
-        ) .* get_base_power(system)
+        required_reserve[((i - 1) * 12 + 1):(i * 12)] =
+            get_time_series_values(
+                Deterministic,
+                reserve_component,
+                "requirement";
+                start_time = hour_timestamps[i],
+                len = 12,
+            ) .* get_base_power(system)
     end
     res_req = DataFrames.DataFrame(Dict(:Requirement => required_reserve))
 
@@ -414,12 +414,14 @@ end
 function get_reserve_data(
     res::PSI.SimulationProblemResults,
     sym_dict::Dict,
-    system::PSY.System
+    system::PSY.System,
 )
     variables = Dict{Symbol, DataFrames.DataFrame}()
-    variables[sym_dict["reserve"]] = read_realized_variables(res, names = [sym_dict["reserve"]])[sym_dict["reserve"]]
+    variables[sym_dict["reserve"]] =
+        read_realized_variables(res, names = [sym_dict["reserve"]])[sym_dict["reserve"]]
     if "slack" in keys(sym_dict)
-        variables[sym_dict["slack"]] = read_realized_variables(res, names = [sym_dict["slack"]])[sym_dict["slack"]]
+        variables[sym_dict["slack"]] =
+            read_realized_variables(res, names = [sym_dict["slack"]])[sym_dict["slack"]]
     end
 
     # Scale from 100 MW to MW
@@ -435,7 +437,7 @@ end
 function my_categorize_stage2_reserves(
     data::Dict{Symbol, DataFrames.DataFrame},
     categories::Dict,
-    sym_dict::Dict
+    sym_dict::Dict,
 )
     category_dataframes = Dict{String, DataFrames.DataFrame}()
     var_types = Dict([("ThermalMultiStart", sym_dict["reserve"])])
