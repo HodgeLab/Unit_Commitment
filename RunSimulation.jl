@@ -170,6 +170,8 @@ add_inverter_based_reserves!(
     storage_reserve_names,
 )
 
+add_to_reserve_contributing_devices!(system_ha)
+
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
 set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
