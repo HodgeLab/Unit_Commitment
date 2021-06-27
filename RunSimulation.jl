@@ -11,7 +11,7 @@ solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.01)
 formulation = isempty(ARGS) ? "D" : ARGS[1]
 initial_time = isempty(ARGS) ? "2018-03-15T00:00:00" : ARGS[2]
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[3])
-use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
+use_storage_reserves = isempty(ARGS) ? false : parse(Bool, ARGS[4])
 use_solar_reg = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_solar_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
