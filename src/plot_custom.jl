@@ -342,11 +342,12 @@ end
 # Modified plot_fuel for stage 2 using PowerSimulations
 # --------------------------------------------------
 
-function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System; kwargs...)
+function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System, storage::Bool; kwargs...)
     save_dir = get(kwargs, :save_dir, nothing)
     time_steps = get(kwargs, :time_steps, nothing)
     use_slack = get(kwargs, :use_slack, true)
     title = get(kwargs, :title, "HAUC Fuel")
+    charge_line = get(kwargs, :charge_line, false)
 
     p = PG._empty_plot()
     backend = Plots.backend()
@@ -423,6 +424,27 @@ function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System; kwa
         set_display = false,
         kwargs...,
     )
+
+    # Add charging load line
+    if charge_line && storage
+        pin = read_realized_variables(res, names = [:Pin__GenericBattery])[:Pin__GenericBattery]
+        pin = sum.(eachrow(pin[:, setdiff(names(pin), ["DateTime"])])) .* get_base_power(system) ./ 1000
+        load_and_charging = load_agg .+ pin
+        DataFrames.rename!(load_and_charging, Symbol.(["Load + charging"]))
+        col = PG.match_fuel_colors(fuel_agg[!, ["Storage"]], backend)
+        p = plot_dataframe(
+            p,
+            load_and_charging,
+            gen.time;
+            seriescolor = [col],
+            y_label = y_label,
+            title = nothing,
+            stack = true,
+            nofill = true,
+            set_display = false,
+            kwargs...,
+        )
+    end
 
     # Overwrite x axis label
     layout_kwargs =

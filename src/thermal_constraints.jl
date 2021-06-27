@@ -623,3 +623,37 @@ function _apply_thermal_scenario_based_constraints!(
 
     return
 end
+
+############################## Stage 2 #####################
+
+# Hack for consistency
+function add_custom_total_reserve_constraint!(HAUC::OperationsProblem{GenericOpProblem},
+    allowable_reserve_prop::Float64)
+
+    system = PSI.get_system(HAUC)
+    optimization_container = PSI.get_optimization_container(HAUC)
+    spin = optimization_container.variables[:SPIN__VariableReserve_ReserveUp]
+    reg⁺ = optimization_container.variables[:REG_UP__VariableReserve_ReserveUp]
+    reg⁻ = optimization_container.variables[:REG_DN__VariableReserve_ReserveDown]
+
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+    pg_lim = Dict(
+        g => get_active_power_limits(get_component(ThermalMultiStart, system, g)) for
+        g in thermal_gen_names
+    )
+
+    time_steps = PSI.model_time_steps(optimization_container)
+    jump_model = PSI.get_jump_model(optimization_container)
+
+    # Restrict reserve allocation by % rather than response time
+    JuMP.@constraint(
+        jump_model,
+        [g in intersect(spin.axes[1], reg⁺.axes[1], thermal_gen_names), t in time_steps],
+        spin[g, t] + reg⁺[g, t] <= pg_lim[g].max * allowable_reserve_prop
+    )
+    JuMP.@constraint(
+        jump_model,
+        [g in intersect(reg⁻.axes[1], thermal_gen_names), t in time_steps],
+        reg⁻[g, t] <= pg_lim[g].max * allowable_reserve_prop
+    )
+end

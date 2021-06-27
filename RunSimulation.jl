@@ -11,15 +11,19 @@ solver = optimizer_with_attributes(Gurobi.Optimizer, "MIPGap" => 0.01)
 formulation = isempty(ARGS) ? "D" : ARGS[1]
 initial_time = isempty(ARGS) ? "2018-03-15T00:00:00" : ARGS[2]
 use_storage = isempty(ARGS) ? true : parse(Bool, ARGS[3])
-use_storage_reserves = isempty(ARGS) ? true : parse(Bool, ARGS[4])
+use_storage_reserves = isempty(ARGS) ? false : parse(Bool, ARGS[4])
 use_solar_reg = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_solar_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
-C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
-α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
-supp_type = isempty(ARGS) ? "generic" : ARGS[11]
+use_storage_ff = isempty(ARGS) ? true : parse(Bool, ARGS[9])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
+α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[11]) # Risk tolerance level
+supp_type = isempty(ARGS) ? "generic" : ARGS[12]
 scenarios = 31
+C_res_penalty = 5000.0
+C_ener_penalty = 9000.0
+allowable_reserve_prop = 0.2
 
 # 2 large devices with 490 MW total rated capacity
 storage_reserve_names = ["PLANET_STORAGE", "PERMIAN_BASIN_STORAGE_6"]
@@ -64,6 +68,7 @@ end
 
 optional_title =
     (use_storage ? " stor" : "") *
+    (!use_storage_ff ? " advisory" : "") *
     (use_storage_reserves ? " storres" : "") *
     (use_solar_reg ? " solreg" : "") *
     (use_solar_spin ? " solspin" : "") *
@@ -144,8 +149,8 @@ UC.ext["use_spin"] = true
 UC.ext["use_must_run"] = use_must_run
 UC.ext["C_RR"] = C_RR * get_base_power(system_da)
 UC.ext["α"] = α
-UC.ext["C_res_penalty"] = 5000 * get_base_power(system_da)
-UC.ext["C_ener_penalty"] = 9000 * get_base_power(system_da)
+UC.ext["C_res_penalty"] = C_res_penalty * get_base_power(system_da)
+UC.ext["C_ener_penalty"] = C_ener_penalty * get_base_power(system_da)
 UC.ext["L_REG"] = 1 / 12 # 5 min
 UC.ext["L_SPIN"] = 1 / 6 # 10 min
 UC.ext["L_SUPP"] = 1 / 6 # 10 min
@@ -159,7 +164,7 @@ UC.ext["wind_spin_prop"] = 1
 UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
 UC.ext["supp_type"] = supp_type
-UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
+UC.ext["allowable_reserve_prop"] = allowable_reserve_prop # Can use up to 20% total for all reserves
 
 #################################### Stage 2 problem Definition, ED ########################
 system_ha = System(
@@ -187,7 +192,7 @@ set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
 # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
 set_device_model!(template_hauc, HydroDispatch, FixedOutput)
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RampReserve))
-set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RampReserve))
+set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 if use_storage
     if use_storage_reserves
         set_device_model!(template_hauc, GenericBattery, BatteryAncillaryServices)
@@ -236,7 +241,7 @@ feedforward_dict = Dict{Tuple{String, Symbol, Symbol}, PowerSimulations.Abstract
     #     affected_variables = ["SPIN__VariableReserve_ReserveUp"],
     # ),
 )
-if use_storage
+if use_storage && use_storage_ff
     feedforward_dict[("HAUC", :devices, :GenericBattery)] = EnergyTargetFF(
         variable_source_problem = PSI.ENERGY,
         affected_variables = [PSI.ENERGY],
@@ -271,6 +276,10 @@ sim = Simulation(
 )
 
 build_out = build!(sim; serialize = false)
+
+HAUC = sim.problems["HAUC"]
+add_custom_total_reserve_constraint!(HAUC, allowable_reserve_prop)
+
 (status, solvetime) = @timed execute!(sim)
 
 results = SimulationResults(sim)
@@ -281,10 +290,11 @@ if status.value == 0
 
     # Stage 1 outputs
     UC = sim.problems["DAUC"]
-    write_to_CSV(UC, system_file_path, UC_output_path; time = solvetime)
+    write_to_CSV(UC, UC_output_path)
+    write_reserve_summary(UC, UC_output_path)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:24);
+        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:25);
 
         for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
             plot_reserve(
@@ -292,15 +302,32 @@ if status.value == 0
                 reserve_name;
                 save_dir = UC_output_path,
                 scenario = scenario,
-                time_steps = 1:24,
+                time_steps = 1:25,
             );
         end
     end
 
+    if use_storage
+        plot_charging(UC; save_dir = UC_output_path, time_steps = 1:25);
+    end
+
     # Stage 2 outputs
+    write_reserve_summary(
+        results_rh,
+        system_ha,
+        HAUC_output_path,
+        PSI.get_balance_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        use_solar_reg,
+        use_solar_spin,
+        use_storage_reserves;
+    )
+
     my_plot_fuel(
         results_rh,
-        system_ha;
+        system_ha,
+        use_storage;
         use_slack = PSI.get_balance_slack_variables(
             HAUC.internal.optimization_container.settings,
         ),
@@ -323,4 +350,24 @@ if status.value == 0
             save_dir = HAUC_output_path
         );
     end
+
+    if use_storage
+        plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
+    end
+
+    write_summary_stats(
+        UC,
+        solvetime,
+        results_rh,
+        system_ha,
+        PSI.get_services_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        PSI.get_balance_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        C_res_penalty,
+        C_ener_penalty,
+        output_path
+    )
 end
