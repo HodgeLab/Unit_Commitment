@@ -23,6 +23,7 @@ supp_type = isempty(ARGS) ? "generic" : ARGS[12]
 scenarios = 31
 C_res_penalty = 5000.0
 C_ener_penalty = 9000.0
+allowable_reserve_prop = 0.2
 
 # 2 large devices with 490 MW total rated capacity
 storage_reserve_names = ["PLANET_STORAGE", "PERMIAN_BASIN_STORAGE_6"]
@@ -163,7 +164,7 @@ UC.ext["wind_spin_prop"] = 1
 UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
 UC.ext["supp_type"] = supp_type
-UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
+UC.ext["allowable_reserve_prop"] = allowable_reserve_prop # Can use up to 20% total for all reserves
 
 #################################### Stage 2 problem Definition, ED ########################
 system_ha = System(
@@ -190,7 +191,7 @@ set_device_model!(template_hauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_hauc, PowerLoad, StaticPowerLoad)
 # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
 set_device_model!(template_hauc, HydroDispatch, FixedOutput)
-set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
+set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RampReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 if use_storage
     set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
@@ -271,6 +272,10 @@ sim = Simulation(
 )
 
 build_out = build!(sim; serialize = false)
+
+HAUC = sim.problems["HAUC"]
+add_custom_total_reserve_constraint!(HAUC, allowable_reserve_prop)
+
 (status, solvetime) = @timed execute!(sim)
 
 results = SimulationResults(sim)
