@@ -20,6 +20,8 @@ C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[11]
 scenarios = 31
+C_res_penalty = 5000.0
+C_ener_penalty = 9000.0
 
 # 2 large devices with 490 MW total rated capacity
 storage_reserve_names = ["PLANET_STORAGE", "PERMIAN_BASIN_STORAGE_6"]
@@ -144,8 +146,8 @@ UC.ext["use_spin"] = true
 UC.ext["use_must_run"] = use_must_run
 UC.ext["C_RR"] = C_RR * get_base_power(system_da)
 UC.ext["α"] = α
-UC.ext["C_res_penalty"] = 5000 * get_base_power(system_da)
-UC.ext["C_ener_penalty"] = 9000 * get_base_power(system_da)
+UC.ext["C_res_penalty"] = C_res_penalty * get_base_power(system_da)
+UC.ext["C_ener_penalty"] = C_ener_penalty * get_base_power(system_da)
 UC.ext["L_REG"] = 1 / 12 # 5 min
 UC.ext["L_SPIN"] = 1 / 6 # 10 min
 UC.ext["L_SUPP"] = 1 / 6 # 10 min
@@ -337,4 +339,18 @@ if status.value == 0
     end
 
     plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
+
+    _write_summary_stats(
+        results_rh,
+        system_ha,
+        PSI.get_services_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        PSI.get_balance_slack_variables(
+            HAUC.internal.optimization_container.settings,
+        ),
+        C_res_penalty,
+        C_ener_penalty,
+        HAUC_output_path
+    )
 end

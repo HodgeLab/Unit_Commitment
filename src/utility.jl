@@ -327,6 +327,59 @@ function _write_summary_stats(
     CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
 end
 
+function _write_summary_stats(
+    res::PSI.SimulationProblemResults,
+    system::PSY.System,
+    use_service_slack::Bool,
+    use_energy_slack::Bool,
+    C_res_penalty::Float64,
+    C_ener_penalty::Float64,
+    output_path::String
+)
+
+    Δt = 1 / 12
+    thermal_gen_names = get_name.(get_components(ThermalMultiStart, system))
+
+    Pg = read_realized_variables(res, names = [:P__ThermalMultiStart])[:P__ThermalMultiStart]
+
+    total_cost = 0.0
+    for g in thermal_gen_names
+        variable_cost = get_variable(get_operation_cost(get_component(ThermalMultiStart, system, g)))
+        breakpoints = [round(variable_cost[i][2], digits = 10) for i in 1:length(variable_cost)]
+        pg_min = get_active_power_limits(get_component(ThermalMultiStart, system, g))[:min]
+        # Slopes are in $/MWh
+        slopes = get_slopes(variable_cost)
+        for P in Pg[!, g]
+            if P > pg_min
+                pg = round((P - pg_min) * get_base_power(system), digits = 10)
+                # Find first index that pg is below
+                total_cost += slopes[findall(pg .<= breakpoints)[1]] * pg * Δt
+            end
+        end
+    end
+
+    output = Dict(
+        "Variable cost" => total_cost,
+    )
+
+    if use_service_slack
+        output["Penalty cost unserved reg up"] =
+            _1D_total(res, :γ⁺__REG_UP) * C_res_penalty * get_base_power(system) * Δt
+        output["Penalty cost unserved reg down"] =
+            _1D_total(res, :γ⁺__REG_DN) * C_res_penalty * get_base_power(system) * Δt
+        output["Penalty cost unserved spin"] =
+            _1D_total(res, :γ⁺__SPIN) * C_res_penalty * get_base_power(system) * Δt
+    end
+    if use_energy_slack
+        output["Penalty cost unserved load"] =
+            _1D_total(res, :γ⁺__P) * C_ener_penalty * get_base_power(system) * Δt
+        output["Penalty cost overgeneration"] =
+            _1D_total(res, :γ⁻__P) * C_ener_penalty * get_base_power(system) * Δt
+    end
+
+    CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
+end
+
 function save_as_initial_condition(problem::PSI.OperationsProblem{T}, fname, hour) where {T}
     optimization_container = PSI.get_optimization_container(problem)
     jump_model = PSI.get_jump_model(optimization_container)
