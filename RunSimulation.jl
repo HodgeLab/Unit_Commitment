@@ -298,7 +298,9 @@ if status.value == 0
         end
     end
 
-    plot_charging(UC; save_dir = UC_output_path, time_steps = 1:25);
+    if use_storage
+        plot_charging(UC; save_dir = UC_output_path, time_steps = 1:25);
+    end
 
     # Stage 2 outputs
     write_reserve_summary(
@@ -340,7 +342,9 @@ if status.value == 0
         );
     end
 
-    plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
+    if use_storage
+        plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
+    end
 
     write_summary_stats(
         UC,
