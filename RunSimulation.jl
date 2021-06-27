@@ -178,7 +178,7 @@ add_inverter_based_reserves!(
 )
 
 if use_storage_reserves
-    set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
+    set_storage_reserve_SOC_to_max!(system_ha, storage_reserve_names)
 end
 
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
