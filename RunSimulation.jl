@@ -16,9 +16,10 @@ use_solar_reg = isempty(ARGS) ? true : parse(Bool, ARGS[5])
 use_solar_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
-C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
-α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
-supp_type = isempty(ARGS) ? "generic" : ARGS[11]
+use_storage_ff = isempty(ARGS) ? true : parse(Bool, ARGS[9])
+C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
+α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[11]) # Risk tolerance level
+supp_type = isempty(ARGS) ? "generic" : ARGS[12]
 scenarios = 31
 C_res_penalty = 5000.0
 C_ener_penalty = 9000.0
@@ -66,6 +67,7 @@ end
 
 optional_title =
     (use_storage ? " stor" : "") *
+    (!use_storage_ff ? " advisory" : "") *
     (use_storage_reserves ? " storres" : "") *
     (use_solar_reg ? " solreg" : "") *
     (use_solar_spin ? " solspin" : "") *
@@ -234,7 +236,7 @@ feedforward_dict = Dict{Tuple{String, Symbol, Symbol}, PowerSimulations.Abstract
     #     affected_variables = ["SPIN__VariableReserve_ReserveUp"],
     # ),
 )
-if use_storage
+if use_storage && use_storage_ff
     feedforward_dict[("HAUC", :devices, :GenericBattery)] = EnergyTargetFF(
         variable_source_problem = PSI.ENERGY,
         affected_variables = [PSI.ENERGY],
