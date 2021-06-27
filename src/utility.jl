@@ -111,7 +111,9 @@ function write_summary_stats(
     CVaRReserveUnitCommitmentCC}
 }
 
-    da_output = _write_summary_stats(problem, solvetime)
+    da_output = _write_summary_stats(problem,
+        solvetime;
+        time_steps = 1:24)
 
     hauc_output = _write_summary_stats(res,
         system,
@@ -133,11 +135,14 @@ end
 
 function _write_summary_stats(
     problem::PSI.OperationsProblem{T},
-    solvetime::Union{Nothing, Float64},
+    solvetime::Union{Nothing, Float64};
+    time_steps = nothing
 ) where {T <: CVaRReserveUnitCommitmentCC}
     optimization_container = PSI.get_optimization_container(problem)
     system = PSI.get_system(problem)
-    time_steps = PSI.model_time_steps(optimization_container)
+    if isnothing(time_steps)
+        time_steps = PSI.model_time_steps(optimization_container)
+    end
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
@@ -158,11 +163,11 @@ function _write_summary_stats(
     )
 
     obj_dict = PSI.get_jump_model(optimization_container).obj_dict
-    ug = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])
-    wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])
-    z = PSI.axis_array_to_dataframe(obj_dict[:z], [:z])
+    ug = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[time_steps, :]
+    wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])[time_steps, :]
+    z = PSI.axis_array_to_dataframe(obj_dict[:z], [:z])[time_steps, :]
     δ_sg = obj_dict[:δ_sg]
-    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data
+    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data[:, time_steps]
 
     output = Dict(
         "Solve time (s)" => solvetime,
@@ -206,16 +211,16 @@ function _write_summary_stats(
 
     if use_slack
         if use_reg
-            slack_reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])
-            slack_reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])
+            slack_reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])[time_steps, :]
+            slack_reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])[time_steps, :]
         end
         if use_spin
-            slack_spin = PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])
+            slack_spin = PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])[time_steps, :]
         end
         slack_energy⁺ =
-            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁺], [:slack_energy⁺])
+            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁺], [:slack_energy⁺])[time_steps, :]
         slack_energy⁻ =
-            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])
+            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])[time_steps, :]
     end
 
     if use_slack
@@ -240,11 +245,14 @@ end
 
 function _write_summary_stats(
     problem::PSI.OperationsProblem{T},
-    solvetime::Union{Nothing, Float64},
+    solvetime::Union{Nothing, Float64};
+    time_steps = nothing
 ) where {T <: Union{BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}}
     optimization_container = PSI.get_optimization_container(problem)
     system = PSI.get_system(problem)
-    time_steps = PSI.model_time_steps(optimization_container)
+    if isnothing(time_steps)
+        time_steps = PSI.model_time_steps(optimization_container)
+    end
     use_slack = PSI.get_balance_slack_variables(optimization_container.settings)
     use_reg = problem.ext["use_reg"]
     use_spin = problem.ext["use_spin"]
@@ -263,10 +271,10 @@ function _write_summary_stats(
     )
 
     obj_dict = PSI.get_jump_model(optimization_container).obj_dict
-    ug = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])
-    wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])
+    ug = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[time_steps, :]
+    wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])[time_steps, :]
     δ_sg = obj_dict[:δ_sg]
-    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data
+    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data[:, time_steps]
 
     output = Dict(
         "Solve time (s)" => solvetime,
@@ -304,16 +312,16 @@ function _write_summary_stats(
 
     if use_slack
         if use_reg
-            slack_reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])
-            slack_reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])
+            slack_reg⁺ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])[time_steps, :]
+            slack_reg⁻ = PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])[time_steps, :]
         end
         if use_spin
-            slack_spin = PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])
+            slack_spin = PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])[time_steps, :]
         end
         slack_energy⁺ =
-            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁺], [:slack_energy⁺])
+            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁺], [:slack_energy⁺])[time_steps, :]
         slack_energy⁻ =
-            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])
+            PSI.axis_array_to_dataframe(obj_dict[:slack_energy⁻], [:slack_energy⁻])[time_steps, :]
     end
 
     if use_slack
