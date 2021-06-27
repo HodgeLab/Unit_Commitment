@@ -365,11 +365,19 @@ function _write_summary_stats(
         pg_min = get_active_power_limits(get_component(ThermalMultiStart, system, g))[:min]
         # Slopes are in $/MWh
         slopes = get_slopes(variable_cost)
+        power_in_segment = get_breakpoint_upperbounds(variable_cost)
         for P in Pg[!, g]
             if P > pg_min
                 pg = round((P - pg_min) * get_base_power(system), digits = 10)
-                # Find first index that pg is below
-                total_cost += slopes[findall(pg .<= breakpoints)[1]] * pg * Δt
+                if any(pg .== breakpoints)
+                    total_cost += sum(power_in_segment[i] * slopes[i] for i in 1:(findall(pg .== breakpoints)[1])) * Δt
+                else
+                    # Add power below last segment
+                    total_cost += sum(power_in_segment[i] * slopes[i] for i in findall(breakpoints .< pg)) * Δt
+                    # Add power in last segment
+                    i_segment = findall(pg .< breakpoints)[1]
+                    total_cost += slopes[i_segment] * (pg - breakpoints[i_segment - 1]) * Δt
+                end
             end
         end
     end
