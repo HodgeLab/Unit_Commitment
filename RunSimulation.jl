@@ -279,7 +279,7 @@ if status.value == 0
 
     # Stage 1 outputs
     UC = sim.problems["DAUC"]
-    write_to_CSV(UC, system_file_path, UC_output_path; time = solvetime)
+    write_to_CSV(UC, UC_output_path)
     write_reserve_summary(UC, UC_output_path)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
@@ -340,7 +340,9 @@ if status.value == 0
 
     plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
 
-    _write_summary_stats(
+    write_summary_stats(
+        UC,
+        solvetime,
         results_rh,
         system_ha,
         PSI.get_services_slack_variables(
@@ -351,6 +353,6 @@ if status.value == 0
         ),
         C_res_penalty,
         C_ener_penalty,
-        HAUC_output_path
+        output_path
     )
 end

@@ -73,9 +73,7 @@ end
 # Unconventional route. To be cleaned later.
 function PSI.write_to_CSV(
     problem::PSI.OperationsProblem{T},
-    data_path::String,
     output_path::String;
-    time = nothing,
 ) where {
     T <: Union{
         CVaRReserveUnitCommitmentCC,
@@ -95,12 +93,46 @@ function PSI.write_to_CSV(
         end
     end
 
-    _write_summary_stats(problem, output_path, time)
+end
+
+function write_summary_stats(
+    problem::PSI.OperationsProblem{T},
+    solvetime::Union{Nothing, Float64},
+    res::PSI.SimulationProblemResults,
+    system::PSY.System,
+    use_service_slack::Bool,
+    use_energy_slack::Bool,
+    C_res_penalty::Float64,
+    C_ener_penalty::Float64,
+    output_path::String,
+) where {T <: Union{
+    BasecaseUnitCommitmentCC,
+    StochasticUnitCommitmentCC,
+    CVaRReserveUnitCommitmentCC}
+}
+
+    da_output = _write_summary_stats(problem, solvetime)
+
+    hauc_output = _write_summary_stats(res,
+        system,
+        use_service_slack,
+        use_energy_slack,
+        C_res_penalty,
+        C_ener_penalty,)
+
+    output = merge(da_output, hauc_output)
+
+    output["HAUC Total cost"] =
+        output["No-load cost"] +
+        output["HAUC Variable cost"] +
+        output["Start-up cost"] +
+        output["Shut-down cost"]
+
+    CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
 end
 
 function _write_summary_stats(
     problem::PSI.OperationsProblem{T},
-    output_path::String,
     solvetime::Union{Nothing, Float64},
 ) where {T <: CVaRReserveUnitCommitmentCC}
     optimization_container = PSI.get_optimization_container(problem)
@@ -157,7 +189,7 @@ function _write_summary_stats(
             ),
         ),
         "No-load cost" => sum(sum(ug[!, n] .* no_load_cost[n]) for n in names(ug)),
-        "Variable cost" => sum(Cg) / (ndims(Cg) == 3 ? size(Cg)[2] : 1),
+        "DA Variable cost" => sum(Cg) / (ndims(Cg) == 3 ? size(Cg)[2] : 1),
         "Shut-down cost" => sum(sum(wg[!, n] .* shutdown_cost[n]) for n in names(wg)),
         "CVaR cost" =>
             C_RR *
@@ -165,9 +197,9 @@ function _write_summary_stats(
     )
     output["Start-up cost"] =
         output["Hot start cost"] + output["Warm start cost"] + output["Cold start cost"]
-    output["Total cost"] =
+    output["DA Total cost"] =
         output["No-load cost"] +
-        output["Variable cost"] +
+        output["DA Variable cost"] +
         output["Start-up cost"] +
         output["Shut-down cost"] +
         output["CVaR cost"]
@@ -188,38 +220,26 @@ function _write_summary_stats(
 
     if use_slack
         if use_reg
-            output["Penalty cost unserved reg up"] =
+            output["DA Penalty cost unserved reg up"] =
                 C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺])
-            output["Penalty cost unserved reg down"] =
+            output["DA Penalty cost unserved reg down"] =
                 C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻])
         end
         if use_spin
-            output["Penalty cost unserved spin"] =
+            output["DA Penalty cost unserved spin"] =
                 C_res_penalty * sum(slack_spin[!, :slack_spin])
         end
-        output["Penalty cost unserved load"] =
+        output["DA Penalty cost unserved load"] =
             C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺])
-        output["Penalty cost overgeneration"] =
+        output["DA Penalty cost overgeneration"] =
             C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻])
-
-        output["Total cost with penalties"] =
-            output["Total cost"] +
-            (
-                use_reg ?
-                output["Penalty cost unserved reg up"] +
-                output["Penalty cost unserved reg down"] : 0
-            ) +
-            (use_spin ? output["Penalty cost unserved spin"] : 0) +
-            output["Penalty cost unserved load"] +
-            output["Penalty cost overgeneration"]
     end
 
-    CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
+    return output
 end
 
 function _write_summary_stats(
     problem::PSI.OperationsProblem{T},
-    output_path::String,
     solvetime::Union{Nothing, Float64},
 ) where {T <: Union{BasecaseUnitCommitmentCC, StochasticUnitCommitmentCC}}
     optimization_container = PSI.get_optimization_container(problem)
@@ -271,14 +291,14 @@ function _write_summary_stats(
             ),
         ),
         "No-load cost" => sum(sum(ug[!, n] .* no_load_cost[n]) for n in names(ug)),
-        "Variable cost" => sum(Cg) / (ndims(Cg) == 3 ? size(Cg)[2] : 1),
+        "DA Variable cost" => sum(Cg) / (ndims(Cg) == 3 ? size(Cg)[2] : 1),
         "Shut-down cost" => sum(sum(wg[!, n] .* shutdown_cost[n]) for n in names(wg)),
     )
     output["Start-up cost"] =
         output["Hot start cost"] + output["Warm start cost"] + output["Cold start cost"]
-    output["Total cost"] =
+    output["DA Total cost"] =
         output["No-load cost"] +
-        output["Variable cost"] +
+        output["DA Variable cost"] +
         output["Start-up cost"] +
         output["Shut-down cost"]
 
@@ -298,33 +318,22 @@ function _write_summary_stats(
 
     if use_slack
         if use_reg
-            output["Penalty cost unserved reg up"] =
+            output["DA Penalty cost unserved reg up"] =
                 C_res_penalty * sum(slack_reg⁺[!, :slack_reg⁺])
-            output["Penalty cost unserved reg down"] =
+            output["DA Penalty cost unserved reg down"] =
                 C_res_penalty * sum(slack_reg⁻[!, :slack_reg⁻])
         end
         if use_spin
-            output["Penalty cost unserved spin"] =
+            output["DA Penalty cost unserved spin"] =
                 C_res_penalty * sum(slack_spin[!, :slack_spin])
         end
-        output["Penalty cost unserved load"] =
+        output["DA Penalty cost unserved load"] =
             C_ener_penalty * sum(slack_energy⁺[!, :slack_energy⁺])
-        output["Penalty cost overgeneration"] =
+        output["DA Penalty cost overgeneration"] =
             C_ener_penalty * sum(slack_energy⁻[!, :slack_energy⁻])
-
-        output["Total cost with penalties"] =
-            output["Total cost"] +
-            (
-                use_reg ?
-                output["Penalty cost unserved reg up"] +
-                output["Penalty cost unserved reg down"] : 0
-            ) +
-            (use_spin ? output["Penalty cost unserved spin"] : 0) +
-            output["Penalty cost unserved load"] +
-            output["Penalty cost overgeneration"]
     end
 
-    CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
+    return output
 end
 
 function _write_summary_stats(
@@ -334,7 +343,6 @@ function _write_summary_stats(
     use_energy_slack::Bool,
     C_res_penalty::Float64,
     C_ener_penalty::Float64,
-    output_path::String
 )
 
     Δt = 1 / 12
@@ -359,25 +367,25 @@ function _write_summary_stats(
     end
 
     output = Dict(
-        "Variable cost" => total_cost,
+        "HAUC Variable cost" => total_cost,
     )
 
     if use_service_slack
-        output["Penalty cost unserved reg up"] =
+        output["HAUC Penalty cost unserved reg up"] =
             _1D_total(res, :γ⁺__REG_UP) * C_res_penalty * get_base_power(system) * Δt
-        output["Penalty cost unserved reg down"] =
+        output["HAUC Penalty cost unserved reg down"] =
             _1D_total(res, :γ⁺__REG_DN) * C_res_penalty * get_base_power(system) * Δt
-        output["Penalty cost unserved spin"] =
+        output["HAUC Penalty cost unserved spin"] =
             _1D_total(res, :γ⁺__SPIN) * C_res_penalty * get_base_power(system) * Δt
     end
     if use_energy_slack
-        output["Penalty cost unserved load"] =
+        output["HAUC Penalty cost unserved load"] =
             _1D_total(res, :γ⁺__P) * C_ener_penalty * get_base_power(system) * Δt
-        output["Penalty cost overgeneration"] =
+        output["HAUC Penalty cost overgeneration"] =
             _1D_total(res, :γ⁻__P) * C_ener_penalty * get_base_power(system) * Δt
     end
 
-    CSV.write(joinpath(output_path, "Summary_stats.csv"), output)
+    return output
 end
 
 function save_as_initial_condition(problem::PSI.OperationsProblem{T}, fname, hour) where {T}
