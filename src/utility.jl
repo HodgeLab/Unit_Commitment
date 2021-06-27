@@ -477,22 +477,22 @@ function write_reserve_summary(
         (spin[:, intersect(names(spin), thermal_gen_names)]))))
 
     if use_slack
-        output["Unserved REG_UP [GWh]"] = sum.eachcol(
-            PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])[time_steps, :])
-        output["Unserved REG_DN [GWh]"] = sum.eachcol(
-            PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])[time_steps, :])
-        output["Unserved SPIN [GWh]"] = sum.eachcol(
-            PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])[time_steps, :])
+        output["Unserved REG_UP [GWh]"] = sum(sum.(eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁺], [:slack_reg⁺])[time_steps, :])))
+        output["Unserved REG_DN [GWh]"] = sum(sum.(eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:slack_reg⁻], [:slack_reg⁻])[time_steps, :])))
+        output["Unserved SPIN [GWh]"] = sum(sum.(eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:slack_spin], [:slack_spin])[time_steps, :])))
     end
     if use_solar_spin
-        output["Solar SPIN [GWh]"] = sum.eachcol(
-            PSI.axis_array_to_dataframe(obj_dict[:spin_S], [:spin_S])[time_steps, :])
+        output["Solar SPIN [GWh]"] = sum(sum.(eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:spin_S], [:spin_S])[time_steps, :])))
     end
     if use_solar_reg
-        output["Solar REG_UP [GWh]"] = sum.eachcol(
-            PSI.axis_array_to_dataframe(obj_dict[:reg⁺_S], [:reg⁺_S])[time_steps, :])
-        output["Solar REG_DN [GWh]"] = sum.eachcol(
-            PSI.axis_array_to_dataframe(obj_dict[:reg⁻_S], [:reg⁻_S])[time_steps, :])
+        output["Solar REG_UP [GWh]"] = sum(sum.(eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:reg⁺_S], [:reg⁺_S])[time_steps, :])))
+        output["Solar REG_DN [GWh]"] = sum(sum.(eachcol(
+            PSI.axis_array_to_dataframe(obj_dict[:reg⁻_S], [:reg⁻_S])[time_steps, :])))
     end
     if use_storage_reserves
         output["Storage SPIN [GWh]"] = sum(sum.(eachrow(
