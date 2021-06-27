@@ -167,7 +167,12 @@ function _write_summary_stats(
     wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])[time_steps, :]
     z = PSI.axis_array_to_dataframe(obj_dict[:z], [:z])[time_steps, :]
     δ_sg = obj_dict[:δ_sg]
-    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data[:, time_steps]
+    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data
+    if ndims(Cg) == 3
+        Cg = Cg[:, :, time_steps]
+    else
+        Cg = Cg[:, time_steps]
+    end
 
     output = Dict(
         "Solve time (s)" => solvetime,
@@ -274,7 +279,12 @@ function _write_summary_stats(
     ug = PSI.axis_array_to_dataframe(obj_dict[:ug], [:ug])[time_steps, :]
     wg = PSI.axis_array_to_dataframe(obj_dict[:wg], [:wg])[time_steps, :]
     δ_sg = obj_dict[:δ_sg]
-    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data[:, time_steps]
+    Cg = JuMP.value.(optimization_container.expressions[:Cg]).data
+    if ndims(Cg) == 3
+        Cg = Cg[:, :, time_steps]
+    else
+        Cg = Cg[:, time_steps]
+    end
 
     output = Dict(
         "Solve time (s)" => solvetime,
