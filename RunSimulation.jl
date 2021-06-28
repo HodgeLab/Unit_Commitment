@@ -290,7 +290,12 @@ if status.value == 0
     write_reserve_summary(UC, UC_output_path)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:25);
+        plot_fuel(UC;
+            scenario = scenario,
+            time_steps = 1:25,
+            font_size = 15,
+            save_dir = UC_output_path
+        );
 
         for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
             plot_reserve(
@@ -299,12 +304,19 @@ if status.value == 0
                 save_dir = UC_output_path,
                 scenario = scenario,
                 time_steps = 1:25,
+                font_size = 15,
             );
         end
     end
 
     if use_storage
-        plot_charging(UC; save_dir = UC_output_path, time_steps = 1:25);
+        plot_charging(UC;
+            font_size = 12,
+            width = 400,
+            height = 240,
+            save_dir = UC_output_path,
+            time_steps = 1:25
+        );
     end
 
     # Stage 2 outputs
@@ -327,6 +339,7 @@ if status.value == 0
         use_slack = PSI.get_balance_slack_variables(
             HAUC.internal.optimization_container.settings,
         ),
+        font_size = 15,
         save_dir = HAUC_output_path,
     );
 
@@ -343,12 +356,20 @@ if status.value == 0
             use_slack = PSI.get_services_slack_variables(
                 HAUC.internal.optimization_container.settings,
             ),
+            font_size = 15,
             save_dir = HAUC_output_path
         );
     end
 
     if use_storage
-        plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
+        plot_charging(
+            results_rh,
+            system_ha;
+            font_size = 12,
+            width = 400,
+            height = 240,
+            save_dir = HAUC_output_path
+        );
     end
 
     write_summary_stats(

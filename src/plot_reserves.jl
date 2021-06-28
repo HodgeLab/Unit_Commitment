@@ -90,7 +90,7 @@ function plot_reserve(
 
     res_req =
         DataFrames.DataFrame(Dict(:Requirement => required_reserve)) .*
-        get_base_power(system)
+        get_base_power(system) ./ 1000
 
     p = _plot_reserve_internal(reserves, res_req, gen.time, sym_dict, use_slack; kwargs...)
 
@@ -102,7 +102,7 @@ function plot_reserve(
             if isfile(fname)
                 rm(fname)
             end
-            PG.save_plot(p, fname, Plots.backend())
+            PG.save_plot(p, fname, Plots.backend(); kwargs...)
         end
     end
 
@@ -125,7 +125,7 @@ function _plot_reserve_internal(
     cat_names = [cat_names[2], cat_names[1], cat_names[3:end]...]
     reserves_agg = PG.combine_categories(reserves; names = cat_names)
 
-    y_label = "Reserves (MW)"
+    y_label = "Reserves (GW)"
 
     seriescolor = PG.match_fuel_colors(reserves_agg, backend)
     if "supp" in keys(sym_dict)
@@ -261,9 +261,9 @@ function get_reserve_data(
         end
     end
 
-    # Scale from 100 MW to MW
+    # Scale from 100 MW to GW
     for v in keys(variables)
-        variables[v] .*= get_base_power(system)
+        variables[v] .*= get_base_power(system) ./ 1000
     end
 
     timestamps = get_timestamps(problem)[time_steps]
@@ -395,7 +395,7 @@ function plot_stage2_reserves(
                 "requirement";
                 start_time = hour_timestamps[i],
                 len = 12,
-            ) .* get_base_power(system)
+            ) .* get_base_power(system) ./ 1000
     end
     res_req = DataFrames.DataFrame(Dict(:Requirement => required_reserve))
 
@@ -409,7 +409,7 @@ function plot_stage2_reserves(
             if isfile(fname)
                 rm(fname)
             end
-            PG.save_plot(p, fname, Plots.backend())
+            PG.save_plot(p, fname, Plots.backend(); kwargs...)
         end
     end
 
@@ -429,10 +429,10 @@ function get_reserve_data(
             read_realized_variables(res, names = [sym_dict["slack"]])[sym_dict["slack"]]
     end
 
-    # Scale from 100 MW to MW
+    # Scale from 100 MW to GW
     for v in keys(variables)
         variables[v][:, setdiff(names(variables[v]), ["DateTime"])] .*=
-            get_base_power(system)
+            get_base_power(system) ./ 1000
     end
 
     timestamps = get_realized_timestamps(res)

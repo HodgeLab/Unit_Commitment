@@ -32,10 +32,13 @@ function plot_charging(
         mode = "lines", line_shape = "hv"
     )
 
+    plot_kwargs =
+    Dict{Symbol, Any}(((k, v) for (k, v) in kwargs if k in PG.SUPPORTED_EXTRA_PLOT_KWARGS))
+
     layout = Plots.PlotlyJS.Layout(;
     xaxis=Plots.PlotlyJS.attr(title="Time of Day"),
-    yaxis=Plots.PlotlyJS.attr(title="Total Storage Discharge Power (GW)"),)
-    p = Plots.PlotlyJS.plot([trace1], layout)
+    yaxis=Plots.PlotlyJS.attr(title="Discharge Power (GW)"),)
+    p = Plots.PlotlyJS.plot([trace1], layout; plot_kwargs...)
 
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
@@ -45,7 +48,7 @@ function plot_charging(
             if isfile(fname)
                 rm(fname)
             end
-            PG.save_plot(p, fname, Plots.backend())
+            PG.save_plot(p, fname, Plots.backend(); kwargs...)
         end
     end
 
@@ -74,10 +77,13 @@ function plot_charging(
         mode = "lines", line_shape = "hv"
     )
 
+    plot_kwargs =
+    Dict{Symbol, Any}(((k, v) for (k, v) in kwargs if k in PG.SUPPORTED_EXTRA_PLOT_KWARGS))
+
     layout = Plots.PlotlyJS.Layout(;
     xaxis=Plots.PlotlyJS.attr(title="Time of Day"),
-    yaxis=Plots.PlotlyJS.attr(title="Total Storage Discharge Power (GW)"),)
-    p = Plots.PlotlyJS.plot([trace1], layout)
+    yaxis=Plots.PlotlyJS.attr(title="Discharge Power (GW)"),)
+    p = Plots.PlotlyJS.plot([trace1], layout; plot_kwargs...)
 
     if !isnothing(save_dir)
         title = replace(title, " " => "_")
@@ -87,7 +93,7 @@ function plot_charging(
             if isfile(fname)
                 rm(fname)
             end
-            PG.save_plot(p, fname, Plots.backend())
+            PG.save_plot(p, fname, Plots.backend(); kwargs...)
         end
     end
 
