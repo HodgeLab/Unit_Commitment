@@ -22,7 +22,7 @@ use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
 C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[11]
-supp_at_night = isempty(ARGS) ? true : parse(Bool, ARGS[12])
+supp_at_night = isempty(ARGS) ? false : parse(Bool, ARGS[12])
 scenarios = 31
 
 scenario_plot_dict = Dict{String, Vector{Int64}}(
@@ -69,7 +69,8 @@ optional_title =
     (use_solar_reg ? " solreg" : "") *
     (use_solar_spin ? " solspin" : "") *
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "") *
-    (formulation == "C" ? " " * supp_type : "")
+    (formulation == "C" ? " " * supp_type : "") *
+    (formulation == "C" && !supp_at_night ? " no supp_at_night" : "")
 
 output_path =
     "./results/" *

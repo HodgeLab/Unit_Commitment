@@ -20,7 +20,7 @@ use_storage_ff = isempty(ARGS) ? true : parse(Bool, ARGS[9])
 C_RR = isempty(ARGS) ? 20 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[11]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[12]
-supp_at_night = isempty(ARGS) ? true : parse(Bool, ARGS[13])
+supp_at_night = isempty(ARGS) ? false : parse(Bool, ARGS[13])
 scenarios = 31
 C_res_penalty = 5000.0
 C_ener_penalty = 9000.0
@@ -74,7 +74,8 @@ optional_title =
     (use_solar_reg ? " solreg" : "") *
     (use_solar_spin ? " solspin" : "") *
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "") *
-    (formulation == "C" ? " " * supp_type : "")
+    (formulation == "C" ? " " * supp_type : "") *
+    (formulation == "C" && !supp_at_night ? " no supp_at_night" : "")
 
 output_path =
     "./results/" *
