@@ -175,7 +175,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
                 area,
                 "solar_power";
                 start_time = case_initial_time,
-            ) .* solar_scale ./ 100,
+            ),
         )
         sun_up = [any(area_solar_forecast_scenarios[:, c] .> 0.0) for c in 1:size(area_solar_forecast_scenarios)[2]]
 
