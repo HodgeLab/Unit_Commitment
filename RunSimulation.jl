@@ -17,9 +17,10 @@ use_solar_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
 use_storage_ff = isempty(ARGS) ? true : parse(Bool, ARGS[9])
-C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
+C_RR = isempty(ARGS) ? 20 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[11]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[12]
+supp_at_night = isempty(ARGS) ? true : parse(Bool, ARGS[13])
 scenarios = 31
 C_res_penalty = 5000.0
 C_ener_penalty = 9000.0
@@ -165,6 +166,7 @@ UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
 UC.ext["supp_type"] = supp_type
 UC.ext["allowable_reserve_prop"] = allowable_reserve_prop # Can use up to 20% total for all reserves
+UC.ext["supp_at_night"] = supp_at_night
 
 #################################### Stage 2 problem Definition, ED ########################
 system_ha = System(

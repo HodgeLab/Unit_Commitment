@@ -11,6 +11,7 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     C_res_penalty = problem.ext["C_res_penalty"]
     C_ener_penalty = problem.ext["C_ener_penalty"]
     supp_type = problem.ext["supp_type"]
+    supp_at_night = problem.ext["supp_at_night"]
 
     if use_storage_reserves && !use_storage
         throw(ArgumentError("Can only add storage to reserves if use_storage is true"))
@@ -166,6 +167,18 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
     optimization_container.expressions[:total_reserve⁻] = total_reserve⁻
 
     if supp_type == "nonspin"
+
+        area = PSY.get_component(Area, system, "FarWest")
+        area_solar_forecast_scenarios = permutedims(
+            PSY.get_time_series_values(
+                Scenarios,
+                area,
+                "solar_power";
+                start_time = case_initial_time,
+            ) .* solar_scale ./ 100,
+        )
+        sun_up = [any(area_solar_forecast_scenarios[:, c] .> 0.0) for c in 1:size(area_solar_forecast_scenarios)[2]]
+
         supp = JuMP.@variable(
             jump_model,
             supp[g in thermal_gen_names, j in scenarios, t in time_steps] >= 0
@@ -184,9 +197,32 @@ function PSI.problem_build!(problem::PSI.OperationsProblem{CVaRReserveUnitCommit
             sum(supp[g, j, t] for g in thermal_gen_names)
         )
         optimization_container.expressions[:total_supp] = total_supp
+
+        # Pin supp to 0 at night
+        if supp_at_night == false
+            for t in time_steps
+                if !sun_up[t]
+                    for g in thermal_gen_names, j in scenarios
+                        JuMP.fix(supp[g, j, t], 0.0; force = true)
+                    end
+                end
+            end
+        end
+
     else # generic
         total_supp =
             JuMP.@variable(jump_model, total_supp[j in scenarios, t in time_steps] >= 0)
+
+        # Pin supp to 0 at night
+        if supp_at_night == false
+            for t in time_steps
+                if !sun_up[t]
+                    for j in scenarios
+                        JuMP.fix(total_supp[j, t], 0.0; force = true)
+                    end
+                end
+            end
+        end
     end
 
     z = JuMP.@variable(jump_model, z[j in scenarios] >= 0) # Eq (25)
