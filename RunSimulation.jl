@@ -21,6 +21,7 @@ C_RR = isempty(ARGS) ? 20 : parse(Float64, ARGS[10]) # Penalty cost of recourse 
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[11]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[12]
 supp_at_night = isempty(ARGS) ? false : parse(Bool, ARGS[13])
+initial_soc = isempty(ARGS) ? 0.0 : parse(Float64, ARGS[14])
 scenarios = 31
 C_res_penalty = 5000.0
 C_ener_penalty = 9000.0
@@ -75,7 +76,8 @@ optional_title =
     (use_solar_spin ? " solspin" : "") *
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "") *
     (formulation == "C" ? " " * supp_type : "") *
-    (formulation == "C" && !supp_at_night ? " no supp_at_night" : "")
+    (formulation == "C" && !supp_at_night ? " no supp_at_night" : "") *
+    (use_storage ? " initial " * string(initial_soc) : "")
 
 output_path =
     "./results/" *
@@ -113,6 +115,8 @@ if !isfile(initial_cond_file)
 end
 
 apply_manual_data_updates!(system_da, use_nuclear, initial_cond_file)
+
+set_initial_SOC!(system_da, initial_soc)
 
 if use_storage_reserves
     set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
@@ -185,8 +189,10 @@ add_inverter_based_reserves!(
     storage_reserve_names,
 )
 
+set_initial_SOC!(system_ha, initial_soc)
+
 if use_storage_reserves
-    set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
+    set_storage_reserve_SOC_to_max!(system_ha, storage_reserve_names)
 end
 
 template_hauc = OperationsProblemTemplate(CopperPlatePowerModel)
