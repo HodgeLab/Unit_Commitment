@@ -395,8 +395,22 @@ function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System, sto
     # Can also try system instead of res, I made up this timestamps call
     load = get_load_data(res; initial_time = first(timestamps))
     load_agg = PG.combine_categories(load.data)
-    load_agg .*= get_base_power(system) ./ 1000
-    DataFrames.rename!(load_agg, [:Load])
+    # Back-up strategy if get_load_data failed
+    if size(load_agg) != (0, 0)
+        load_agg .*= get_base_power(system) ./ 1000
+        DataFrames.rename!(load_agg, [:Load])
+    else
+        hour_timestamps = collect(first(timestamps):Hour(1):last(timestamps))
+        load_agg = zeros(length(timestamps))
+        for i in 1:length(hour_timestamps)
+            load = get_load_data(system; initial_time = hour_timestamps[i])
+            for v in values(load.data)
+                load_agg[((i - 1) * 12 + 1):(i * 12)] .+=
+                    v[1:12, 1] .* get_base_power(system) ./ 1000
+            end
+        end
+        load_agg = DataFrames.DataFrame(Dict(:Load => load_agg))
+    end
 
     p = plot_dataframe(
         p,

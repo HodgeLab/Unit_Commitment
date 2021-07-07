@@ -127,8 +127,8 @@ set_device_model!(template_dauc, RenewableDispatch, RenewableFullDispatch)
 set_device_model!(template_dauc, PowerLoad, StaticPowerLoad)
 # Use FixedOutput instead of HydroDispatchRunOfRiver to get consistent results because model might decide to curtail wind vs. hydro (same cost)
 set_device_model!(template_dauc, HydroDispatch, FixedOutput)
-set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveUp}, RangeReserve))
-set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
+set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveUp}, RampReserve))
+set_service_model!(template_dauc, ServiceModel(VariableReserve{ReserveDown}, RampReserve))
 set_device_model!(template_dauc, GenericBattery, BookKeepingwReservation)
 
 set_device_model!(template_dauc, ThermalMultiStart, ThermalMultiStartUnitCommitment)
@@ -203,7 +203,11 @@ set_device_model!(template_hauc, HydroDispatch, FixedOutput)
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveUp}, RampReserve))
 set_service_model!(template_hauc, ServiceModel(VariableReserve{ReserveDown}, RangeReserve))
 if use_storage
-    set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+    if use_storage_reserves
+        set_device_model!(template_hauc, GenericBattery, BatteryAncillaryServices)
+    else
+        set_device_model!(template_hauc, GenericBattery, BookKeepingwReservation)
+    end
 end
 ### Using Dispatch here, not the same as above
 set_device_model!(template_hauc, ThermalMultiStart, ThermalDispatch)
