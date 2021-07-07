@@ -22,6 +22,7 @@ use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
 C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[9]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[10]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[11]
+supp_at_night = isempty(ARGS) ? false : parse(Bool, ARGS[12])
 scenarios = 31
 
 scenario_plot_dict = Dict{String, Vector{Int64}}(
@@ -68,7 +69,8 @@ optional_title =
     (use_solar_reg ? " solreg" : "") *
     (use_solar_spin ? " solspin" : "") *
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "") *
-    (formulation == "C" ? " " * supp_type : "")
+    (formulation == "C" ? " " * supp_type : "") *
+    (formulation == "C" && !supp_at_night ? " no supp_at_night" : "")
 
 output_path =
     "./results/" *
@@ -150,6 +152,7 @@ UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
 UC.ext["supp_type"] = supp_type
 UC.ext["allowable_reserve_prop"] = 0.2 # Can use up to 20% total for all reserves
+UC.ext["supp_at_night"] = supp_at_night
 
 # Build and solve the standalone problem
 build!(UC; output_dir = output_path, serialize = false) # use serialize=true to get OptimizationModel.json to debug

@@ -129,7 +129,7 @@ function PG.plot_fuel(
             if isfile(fname)
                 rm(fname)
             end
-            PG.save_plot(p, fname, backend)
+            PG.save_plot(p, fname, backend; kwargs...)
         end
     end
     return p
@@ -459,7 +459,7 @@ function my_plot_fuel(res::PSI.SimulationProblemResults, system::PSY.System, sto
             if isfile(fname)
                 rm(fname)
             end
-            PG.save_plot(p, fname, backend)
+            PG.save_plot(p, fname, backend; kwargs...)
         end
     end
     return p

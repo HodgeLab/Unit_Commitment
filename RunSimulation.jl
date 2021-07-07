@@ -17,9 +17,11 @@ use_solar_spin = isempty(ARGS) ? true : parse(Bool, ARGS[6])
 use_must_run = isempty(ARGS) ? true : parse(Bool, ARGS[7])
 use_nuclear = isempty(ARGS) ? true : parse(Bool, ARGS[8])
 use_storage_ff = isempty(ARGS) ? true : parse(Bool, ARGS[9])
-C_RR = isempty(ARGS) ? 5000 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
+C_RR = isempty(ARGS) ? 20 : parse(Float64, ARGS[10]) # Penalty cost of recourse reserve
 α = isempty(ARGS) ? 0.8 : parse(Float64, ARGS[11]) # Risk tolerance level
 supp_type = isempty(ARGS) ? "generic" : ARGS[12]
+supp_at_night = isempty(ARGS) ? false : parse(Bool, ARGS[13])
+initial_soc = isempty(ARGS) ? 0.0 : parse(Float64, ARGS[14])
 scenarios = 31
 C_res_penalty = 5000.0
 C_ener_penalty = 9000.0
@@ -73,7 +75,9 @@ optional_title =
     (use_solar_reg ? " solreg" : "") *
     (use_solar_spin ? " solspin" : "") *
     (formulation == "C" ? " C_RR " * string(C_RR) * " alpha " * string(α) : "") *
-    (formulation == "C" ? " " * supp_type : "")
+    (formulation == "C" ? " " * supp_type : "") *
+    (formulation == "C" && !supp_at_night ? " no supp_at_night" : "") *
+    (use_storage ? " initial " * string(initial_soc) : "")
 
 output_path =
     "./results/" *
@@ -111,6 +115,8 @@ if !isfile(initial_cond_file)
 end
 
 apply_manual_data_updates!(system_da, use_nuclear, initial_cond_file)
+
+set_initial_SOC!(system_da, initial_soc)
 
 if use_storage_reserves
     set_storage_reserve_SOC_to_max!(system_da, storage_reserve_names)
@@ -165,6 +171,7 @@ UC.ext["renewable_reg_prop"] = 1
 UC.ext["renewable_spin_prop"] = 1
 UC.ext["supp_type"] = supp_type
 UC.ext["allowable_reserve_prop"] = allowable_reserve_prop # Can use up to 20% total for all reserves
+UC.ext["supp_at_night"] = supp_at_night
 
 #################################### Stage 2 problem Definition, ED ########################
 system_ha = System(
@@ -181,6 +188,8 @@ add_inverter_based_reserves!(
     use_storage_reserves,
     storage_reserve_names,
 )
+
+set_initial_SOC!(system_ha, initial_soc)
 
 if use_storage_reserves
     set_storage_reserve_SOC_to_max!(system_ha, storage_reserve_names)
@@ -294,7 +303,12 @@ if status.value == 0
     write_reserve_summary(UC, UC_output_path)
 
     for scenario in (formulation == "D" ? [nothing] : plot_scenarios)
-        plot_fuel(UC; scenario = scenario, save_dir = UC_output_path, time_steps = 1:25);
+        plot_fuel(UC;
+            scenario = scenario,
+            time_steps = 1:25,
+            font_size = 15,
+            save_dir = UC_output_path
+        );
 
         for reserve_name in ["REG_UP", "REG_DN", "SPIN"]
             plot_reserve(
@@ -303,12 +317,19 @@ if status.value == 0
                 save_dir = UC_output_path,
                 scenario = scenario,
                 time_steps = 1:25,
+                font_size = 15,
             );
         end
     end
 
     if use_storage
-        plot_charging(UC; save_dir = UC_output_path, time_steps = 1:25);
+        plot_charging(UC;
+            font_size = 12,
+            width = 400,
+            height = 240,
+            save_dir = UC_output_path,
+            time_steps = 1:25
+        );
     end
 
     # Stage 2 outputs
@@ -331,6 +352,7 @@ if status.value == 0
         use_slack = PSI.get_balance_slack_variables(
             HAUC.internal.optimization_container.settings,
         ),
+        font_size = 15,
         save_dir = HAUC_output_path,
     );
 
@@ -347,12 +369,20 @@ if status.value == 0
             use_slack = PSI.get_services_slack_variables(
                 HAUC.internal.optimization_container.settings,
             ),
+            font_size = 15,
             save_dir = HAUC_output_path
         );
     end
 
     if use_storage
-        plot_charging(results_rh, system_ha; save_dir = HAUC_output_path);
+        plot_charging(
+            results_rh,
+            system_ha;
+            font_size = 12,
+            width = 400,
+            height = 240,
+            save_dir = HAUC_output_path
+        );
     end
 
     write_summary_stats(
