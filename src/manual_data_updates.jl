@@ -5,6 +5,14 @@ function set_storage_reserve_SOC_to_max!(system, storage_reserve_names)
     end
 end
 
+function set_initial_SOC!(system, initial_soc)
+    storage_names = PSY.get_name.(get_components(PSY.GenericBattery, system))
+    for stor in storage_names
+        g = get_component(GenericBattery, system, stor)
+        set_initial_energy!(g, get_state_of_charge_limits(g)[:max] * initial_soc)
+    end
+end
+
 # Updates for stage 1
 function apply_manual_data_updates!(system, use_nuclear, initial_cond_file)
     for g in get_components(
